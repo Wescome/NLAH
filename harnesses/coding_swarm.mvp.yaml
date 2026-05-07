@@ -1,0 +1,117 @@
+nlahspec: "0.1"
+
+harness:
+  name: CODING_SWARM_MVP
+  task_family: repository_issue_resolution
+  objective: >
+    Resolve a repository-grounded issue by producing a patch,
+    independent verification, and a PR-ready summary.
+
+runtime:
+  max_patch_workers: 2
+  max_repair_rounds: 1
+  state_root: runs/current/state
+  artifact_root: runs/current/artifacts
+
+roles:
+  Cartographer:
+    responsibility: >
+      Map relevant files, tests, dependencies, and likely blast radius.
+      Must not edit files.
+
+  PatchWorker:
+    responsibility: >
+      Produce one candidate patch from the issue contract and repo map.
+
+  Verifier:
+    responsibility: >
+      Independently check the patch against the original issue,
+      tests, and acceptance contract. Must not repair the patch.
+
+  ReleaseAgent:
+    responsibility: >
+      Produce final.patch, evidence, and a PR-ready summary.
+
+artifacts:
+  IssueContract:
+    path: artifacts/issue_contract.md
+    required: true
+
+  RepoMap:
+    path: artifacts/repo_map.md
+    required: true
+
+  CandidatePatch:
+    path: artifacts/candidate.patch
+    required: true
+
+  VerifierReport:
+    path: artifacts/verifier_report.md
+    required: true
+
+  FinalPatch:
+    path: artifacts/final.patch
+    required: true
+
+  PRSummary:
+    path: artifacts/pr_summary.md
+    required: true
+
+stages:
+  CONTRACT:
+    from: TaskReceived
+    to: IssueContracted
+    role: Cartographer
+    outputs: [IssueContract]
+    gate:
+      all:
+        - exists: IssueContract
+
+  MAP:
+    from: IssueContracted
+    to: RepoMapped
+    role: Cartographer
+    outputs: [RepoMap]
+    gate:
+      all:
+        - exists: RepoMap
+        - repo_map_names_relevant_files
+        - repo_map_names_test_entrypoints
+
+  PATCH:
+    from: RepoMapped
+    to: PatchCandidate
+    role: PatchWorker
+    outputs: [CandidatePatch]
+    gate:
+      all:
+        - exists: CandidatePatch
+        - patch_applies_cleanly: CandidatePatch
+
+  VERIFY:
+    from: PatchCandidate
+    to: VerifiedPatch
+    role: Verifier
+    outputs: [VerifierReport]
+    gate:
+      all:
+        - exists: VerifierReport
+        - verifier_accepts_patch
+        - test_results_support_claims
+
+  RELEASE:
+    from: VerifiedPatch
+    to: PullRequestReady
+    role: ReleaseAgent
+    outputs: [FinalPatch, PRSummary]
+    gate:
+      all:
+        - exists: FinalPatch
+        - exists: PRSummary
+        - final_patch_matches_verified_candidate
+
+failure_taxonomy:
+  missing_artifact: retry_stage
+  patch_does_not_apply: return_to_PATCH
+  verifier_rejects: return_to_PATCH
+  budget_exceeded: release_incomplete
