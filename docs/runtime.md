@@ -1,8 +1,161 @@
 # Runtime
 
-The runtime creates `runs/<run_id>/`, copies the task file, writes artifacts
-under `artifacts/`, and appends provenance events to
-`state/task_history.jsonl`.
+The NLAH runtime executes a compiled harness as an artifact-gated WorkGraph. A stage is complete only after its worker returns declared artifacts, those artifacts exist on disk, and the stage gates pass.
 
-Stages complete only when declared outputs exist and declared gates pass.
-The MVP role execution is deterministic and does not call LLMs.
+## `runHarness`
+
+```ts
+runHarness(
+  harnessPath: string,
+  repoPath: string,
+  taskPath: string,
+  runIdOrOptions?: string | RunHarnessOptions,
+  workerAdapter?: WorkerAdapter
+): Promise<RuntimeResult>
+```
+
+The runtime:
+
+- loads and compiles the harness
+- creates `runs/<run_id>/`
+- copies the task file into the run directory
+- initializes `ArtifactManager`
+- initializes `TraceLogger`
+- builds `StageContext` for each stage
+- executes a worker adapter
+- validates the worker artifact contract
+- checks artifact existence and size
+- evaluates gates
+- writes trace events
+- writes `summary.json`
+
+## `RunHarnessOptions`
+
+```ts
+export type RunHarnessOptions = {
+  runId?: string;
+  workerAdapter?: WorkerAdapter;
+  workerRegistry?: WorkerRegistry;
+};
+```
+
+Compatibility is preserved for the older call style:
+
+```ts
+runHarness(harnessPath, repoPath, taskPath, runId, workerAdapter)
+```
+
+If `workerAdapter` is provided, it runs every stage. If `workerRegistry` is provided, the runtime uses `stage.spec.worker` when present, otherwise the registry default. If neither is provided, the runtime uses `DeterministicWorkerAdapter`.
+
+## `WorkerRegistry`
+
+`WorkerRegistry` resolves named `WorkerAdapter` instances:
+
+- includes `deterministic` by default
+- supports custom registrations
+- supports a configurable default worker
+- throws `RuntimeError` for unknown workers
+
+The CLI currently supports `--worker deterministic`. Programmatic callers can register command or script workers directly.
+
+## `WorkerAdapter`
+
+```ts
+export interface WorkerAdapter {
+  execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput>;
+}
+```
+
+Workers receive structured stage input and write declared artifacts through `ArtifactManager` or through resolved paths from `StageContext`.
+
+The runtime validates `WorkerOutput.createdArtifacts`:
+
+- returning an undeclared artifact fails the run
+- omitting a declared output fails the run
+- reporting a declared artifact without writing a non-empty file fails the run
+
+## `StageContext`
+
+`StageContext` is the structured execution packet passed to workers:
+
+```ts
+export type StageContext = {
+  taskText: string;
+  roleText?: string;
+  inputArtifacts: Record<string, string>;
+  outputArtifactPaths: Record<string, string>;
+};
+```
+
+It includes task text, role policy text when available, declared input artifact contents, and resolved paths for declared output artifacts. Output artifacts are not read during context construction.
+
+## `ArtifactManager`
+
+`ArtifactManager` resolves, reads, writes, and reports statuses for harness artifacts under the current run root. Artifact paths must be relative in the harness.
+
+Important APIs:
+
+- `resolve(name)`
+- `exists(name)`
+- `readText(name)`
+- `writeText(name, content)`
+- `status(name)`
+- `allStatuses()`
+
+## Gates
+
+Gates enforce executable contracts after worker execution and artifact checks. Current gates include:
+
+- `exists`
+- `patch_applies_cleanly`
+- `repo_map_names_relevant_files`
+- `repo_map_names_test_entrypoints`
+- `verifier_accepts_patch`
+- `test_results_support_claims`
+- `final_patch_matches_verified_candidate`
+
+`patch_applies_cleanly` runs `git apply --check` through `ShellAdapter` with a `string[]` command, never `shell=true`.
+
+## Trace Events
+
+A successful stage-run sequence includes:
+
+```text
+run_started
+stage_started
+worker_completed
+artifact_created
+gate_passed
+state_transition
+stage_completed
+run_completed
+```
+
+`worker_completed` is emitted after worker execution succeeds and the worker artifact contract passes, before `artifact_created` and gate events.
+
+If worker execution fails, the runtime emits `run_failed` and does not emit `worker_completed` for that failed stage.
+
+The trace ledger is written to:
+
+```text
+runs/<run_id>/state/task_history.jsonl
+```
+
+## `summary.json`
+
+Every run writes:
+
+```text
+runs/<run_id>/summary.json
+```
+
+The summary is written for both `PASS` and `FAIL` and includes:
+
+- `runId`
+- `status`
+- `finalState`
+- `runRoot`
+- `artifactRoot`
+- `tracePath`
+- `message` on failure when available
+- all artifact statuses

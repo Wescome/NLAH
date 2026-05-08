@@ -1,67 +1,109 @@
 # NLAH
 
-Natural-Language Agent Harness runtime for artifact-gated coding swarms.
+NLAH is a TypeScript-first Natural-Language Agent Harness runtime for artifact-gated coding swarms.
 
-## What this is
+It is not an LLM coding agent. It is a small language workbench for making the organization around coding agents explicit: roles, stages, artifacts, gates, state transitions, worker bindings, and trace records are represented as executable harness/runtime artifacts instead of hidden controller behavior.
 
-NLAH is a TypeScript-first runtime for executing structured natural-language harnesses.
+## Current v0 Status
 
-A harness defines:
+The v0 runtime can execute the MVP coding swarm harness end to end:
 
-- roles
-- stages
-- artifacts
-- gates
-- failure modes
-- runtime state
+```text
+Harness YAML
+-> Zod schema
+-> compiler
+-> WorkGraph
+-> stage runtime
+-> worker adapter
+-> artifact manager
+-> gates
+-> JSONL trace
+-> summary.json
+```
 
-The runtime executes the harness as a typed artifact-gated WorkGraph.
+Current capabilities:
 
-## MVP
+- YAML harness loading and typed Zod validation
+- deterministic WorkGraph compilation and traversal
+- artifact-gated stage completion
+- executable gates, including `git apply --check`
+- trace ledger at `runs/<run_id>/state/task_history.jsonl`
+- machine-readable run summary at `runs/<run_id>/summary.json`
+- CLI text output and JSON output
+- pluggable worker adapter interface
+- worker registry and stage worker binding support
 
-The MVP runs a deterministic coding-swarm harness:
+## Install
 
 ```bash
 pnpm install
+```
+
+## Verification
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm run:mvp
+pnpm run:script-demo
+```
+
+## Run The Deterministic MVP
+
+```bash
 pnpm run:mvp
 ```
 
-Expected output:
+Equivalent direct CLI command:
+
+```bash
+pnpm tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md
+```
+
+Expected status:
 
 ```text
 Status: PASS
 State: PullRequestReady
 ```
 
-## Architecture
+## Script Worker Demo
 
-```text
-YAML Harness
--> Zod Schema
--> Compiler
--> Stage Graph
--> Runtime
--> Artifacts
--> Gates
--> Trace Ledger
+The script worker demo runs the same MVP harness through `ScriptWorkerAdapter` and `WorkerRegistry` without changing runtime code:
+
+```bash
+pnpm run:script-demo
 ```
 
-## v0 Scope
+## CLI JSON Output
 
-Included:
+Automation and CI callers can request a single JSON object on stdout:
 
-- YAML harness loading
-- Zod validation
-- graph compilation
-- deterministic stage execution
-- artifact manager
-- gate evaluator
-- JSONL trace ledger
-- CLI
+```bash
+pnpm tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md --json
+```
 
-Not included yet:
+## CLI Worker Selection
 
-- LLM calls
-- LangGraph
-- GitHub PR creation
-- real multi-agent execution
+The CLI currently exposes deterministic worker selection:
+
+```bash
+pnpm tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md --worker deterministic
+```
+
+Unsupported CLI worker names fail before runtime execution with `unsupported CLI worker: <name>`.
+
+## Supported Workers
+
+`deterministic`: default worker used by `pnpm run:mvp`. It writes deterministic MVP artifacts for the math fixture.
+
+`CommandWorkerAdapter`: in-process adapter API that dispatches stage names to registered TypeScript handler functions.
+
+`ScriptWorkerAdapter`: controlled local-script adapter API that executes stage-specific `string[]` commands through `ShellAdapter`. It does not use `shell=true`.
+
+## Not Yet Implemented
+
+- LLM workers
+- LangGraph integration
+- GitHub PR automation
+- cloud execution
