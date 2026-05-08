@@ -24,5 +24,6 @@ export type RuntimeResult = {
   runRoot: string;
   artifactRoot: string;
   tracePath: string;
+  summaryPath: string;
   message?: string;
 };

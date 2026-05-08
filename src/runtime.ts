@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, copyFile } from "node:fs/promises";
+import { mkdir, copyFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadHarness, compileHarness } from "./compiler.js";
 import { ArtifactManager } from "./artifacts.js";
@@ -61,14 +61,32 @@ function validateWorkerCreatedArtifacts(declaredOutputs: string[], createdArtifa
 async function failRun(
   logger: TraceLogger,
   result: Omit<RuntimeResult, "status">,
-  message: string
+  message: string,
+  artifacts: ArtifactManager
 ): Promise<RuntimeResult> {
   await logger.emit("run_failed", { message });
-  return {
+  const runtimeResult: RuntimeResult = {
     ...result,
     status: "FAIL",
     message
   };
+  await writeRunSummary(runtimeResult, artifacts);
+  return runtimeResult;
+}
+
+async function writeRunSummary(result: RuntimeResult, artifacts: ArtifactManager): Promise<void> {
+  const summary = {
+    runId: result.runId,
+    status: result.status,
+    finalState: result.finalState,
+    runRoot: result.runRoot,
+    artifactRoot: result.artifactRoot,
+    tracePath: result.tracePath,
+    ...(result.message === undefined ? {} : { message: result.message }),
+    artifacts: await artifacts.allStatuses()
+  };
+  await mkdir(path.dirname(result.summaryPath), { recursive: true });
+  await writeFile(result.summaryPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
 }
 
 export async function runHarness(
@@ -89,6 +107,7 @@ export async function runHarness(
   const stateRoot = path.join(runRoot, "state");
   const artifactRoot = path.join(runRoot, "artifacts");
   const tracePath = path.join(stateRoot, "task_history.jsonl");
+  const summaryPath = path.join(runRoot, "summary.json");
   await mkdir(stateRoot, { recursive: true });
   await mkdir(artifactRoot, { recursive: true });
   await copyFile(resolvedTaskPath, path.join(runRoot, "TASK.md"));
@@ -113,7 +132,8 @@ export async function runHarness(
     finalState: state.currentState,
     runRoot,
     artifactRoot,
-    tracePath
+    tracePath,
+    summaryPath
   };
 
   await logger.emit("run_started", { fromState: state.currentState });
@@ -184,7 +204,8 @@ export async function runHarness(
           return failRun(
             logger,
             { ...resultBase, finalState: state.currentState },
-            `missing required output artifact: ${output}`
+            `missing required output artifact: ${output}`,
+            artifacts
           );
         }
       }
@@ -213,7 +234,8 @@ export async function runHarness(
         return failRun(
           logger,
           { ...resultBase, finalState: state.currentState },
-          `gate failed: ${failedGate.gate}: ${failedGate.message ?? ""}`.trim()
+          `gate failed: ${failedGate.gate}: ${failedGate.message ?? ""}`.trim(),
+          artifacts
         );
       }
 
@@ -232,13 +254,15 @@ export async function runHarness(
     }
 
     await logger.emit("run_completed", { toState: state.currentState });
-    return {
+    const runtimeResult: RuntimeResult = {
       ...resultBase,
       status: "PASS",
       finalState: state.currentState
     };
+    await writeRunSummary(runtimeResult, artifacts);
+    return runtimeResult;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return failRun(logger, { ...resultBase, finalState: state.currentState }, message);
+    return failRun(logger, { ...resultBase, finalState: state.currentState }, message, artifacts);
   }
 }

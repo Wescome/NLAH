@@ -26,7 +26,9 @@ describe("runtime", () => {
 
       expect(result.status).toBe("PASS");
       expect(result.finalState).toBe("PullRequestReady");
+      expect(result.summaryPath).toBe(path.join(result.runRoot, "summary.json"));
       await expect(stat(path.join(result.runRoot, "TASK.md"))).resolves.toBeTruthy();
+      await expect(stat(result.summaryPath)).resolves.toBeTruthy();
 
       for (const artifact of [
         "issue_contract.md",
@@ -48,10 +50,22 @@ describe("runtime", () => {
         "gate_passed",
         "state_transition",
         "stage_completed",
-        "run_completed"
+          "run_completed"
       ]) {
         expect(trace).toContain(event);
       }
+
+      const summary = JSON.parse(await readFile(result.summaryPath, "utf8")) as {
+        status: string;
+        finalState: string;
+        tracePath: string;
+        artifacts: Record<string, { exists: boolean; sizeBytes?: number }>;
+      };
+      expect(summary.status).toBe("PASS");
+      expect(summary.finalState).toBe("PullRequestReady");
+      expect(summary.tracePath).toBe(result.tracePath);
+      expect(summary.artifacts.FinalPatch?.exists).toBe(true);
+      expect(summary.artifacts.PRSummary?.sizeBytes).toBeGreaterThan(0);
     } finally {
       process.chdir(cwd);
     }
@@ -358,6 +372,18 @@ describe("runtime", () => {
 
       expect(result.status).toBe("FAIL");
       expect(result.message).toContain("unknown worker: missing");
+      expect(result.summaryPath).toBe(path.join(result.runRoot, "summary.json"));
+      await expect(stat(result.summaryPath)).resolves.toBeTruthy();
+      const summary = JSON.parse(await readFile(result.summaryPath, "utf8")) as {
+        status: string;
+        message?: string;
+        tracePath: string;
+        artifacts: Record<string, { exists: boolean }>;
+      };
+      expect(summary.status).toBe("FAIL");
+      expect(summary.message).toContain("unknown worker: missing");
+      expect(summary.tracePath).toBe(result.tracePath);
+      expect(summary.artifacts.IssueContract?.exists).toBe(false);
     } finally {
       process.chdir(cwd);
     }
