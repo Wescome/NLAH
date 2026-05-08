@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { formatRunResultJson, formatRunResultText } from "../src/cli.js";
+import { createCliWorkerRegistry, formatRunResultJson, formatRunResultText } from "../src/cli.js";
+import { RuntimeError } from "../src/errors.js";
 import type { RuntimeResult } from "../src/state.js";
+import { WorkerRegistry } from "../src/worker_registry.js";
 
 function resultFixture(overrides: Partial<RuntimeResult> = {}): RuntimeResult {
   return {
@@ -40,5 +42,23 @@ describe("cli formatters", () => {
     expect(parsed.status).toBe(result.status);
     expect(parsed.finalState).toBe(result.finalState);
     expect(parsed.summaryPath).toBe(result.summaryPath);
+  });
+});
+
+describe("cli worker registry", () => {
+  it("returns undefined when no worker is selected", () => {
+    expect(createCliWorkerRegistry(undefined)).toBeUndefined();
+  });
+
+  it("returns a WorkerRegistry for deterministic", () => {
+    const registry = createCliWorkerRegistry("deterministic");
+
+    expect(registry).toBeInstanceOf(WorkerRegistry);
+    expect(registry?.getDefault()).toBeTruthy();
+  });
+
+  it("throws RuntimeError for unsupported workers", () => {
+    expect(() => createCliWorkerRegistry("script")).toThrow(RuntimeError);
+    expect(() => createCliWorkerRegistry("script")).toThrow("unsupported CLI worker: script");
   });
 });

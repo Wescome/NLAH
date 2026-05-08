@@ -2,8 +2,10 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
+import { RuntimeError } from "./errors.js";
 import { runHarness } from "./runtime.js";
 import type { RuntimeResult } from "./state.js";
+import { WorkerRegistry } from "./worker_registry.js";
 
 export function formatRunResultText(result: RuntimeResult): string {
   const lines = [
@@ -26,6 +28,18 @@ export function formatRunResultJson(result: RuntimeResult): string {
   return JSON.stringify(result);
 }
 
+export function createCliWorkerRegistry(workerName?: string): WorkerRegistry | undefined {
+  if (workerName === undefined) {
+    return undefined;
+  }
+
+  if (workerName === "deterministic") {
+    return new WorkerRegistry({ defaultWorker: "deterministic" });
+  }
+
+  throw new RuntimeError(`unsupported CLI worker: ${workerName}`);
+}
+
 export function createProgram(): Command {
   const program = new Command();
 
@@ -40,12 +54,30 @@ export function createProgram(): Command {
     .requiredOption("--repo <path>", "Target repository path")
     .requiredOption("--task <path>", "Task file path")
     .option("--run-id <id>", "Run identifier")
+    .option("--worker <name>", "Worker adapter name")
     .option("--json", "Print RuntimeResult as JSON")
-    .action(async (options: { harness: string; repo: string; task: string; runId?: string; json?: boolean }) => {
-      const result = await runHarness(options.harness, options.repo, options.task, options.runId);
-      console.log(options.json ? formatRunResultJson(result) : formatRunResultText(result));
-      process.exitCode = result.status === "PASS" ? 0 : 1;
-    });
+    .action(
+      async (options: {
+        harness: string;
+        repo: string;
+        task: string;
+        runId?: string;
+        worker?: string;
+        json?: boolean;
+      }) => {
+        const workerRegistry = createCliWorkerRegistry(options.worker);
+        const result = workerRegistry
+          ? await runHarness(
+              options.harness,
+              options.repo,
+              options.task,
+              options.runId === undefined ? { workerRegistry } : { runId: options.runId, workerRegistry }
+            )
+          : await runHarness(options.harness, options.repo, options.task, options.runId);
+        console.log(options.json ? formatRunResultJson(result) : formatRunResultText(result));
+        process.exitCode = result.status === "PASS" ? 0 : 1;
+      }
+    );
 
   return program;
 }
