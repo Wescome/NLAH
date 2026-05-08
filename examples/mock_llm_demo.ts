@@ -158,7 +158,8 @@ export async function runMockLlmDemo(): Promise<void> {
 
   const result = await runHarness("harnesses/crew.mvp.yaml", "examples/target_repo_stub", "examples/TASK.md", {
     runId: "mock-llm-demo",
-    workerRegistry
+    workerRegistry,
+    overwriteRun: true
   });
   console.log(JSON.stringify(result, null, 2));
 }

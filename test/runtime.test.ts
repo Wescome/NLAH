@@ -494,4 +494,62 @@ describe("runtime", () => {
       process.chdir(cwd);
     }
   });
+
+  it("running twice with the same runId fails the second run by default and writes summary", async () => {
+    const root = await tempDir("nlah-runtime-reuse-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const cwd = process.cwd();
+
+    process.chdir(root);
+    try {
+      const first = await runHarness(path.join(cwd, "harnesses/crew.mvp.yaml"), repo, taskPath, "runtime-reuse-test");
+      const second = await runHarness(path.join(cwd, "harnesses/crew.mvp.yaml"), repo, taskPath, "runtime-reuse-test");
+
+      expect(first.status).toBe("PASS");
+      expect(second.status).toBe("FAIL");
+      expect(second.finalState).toBe("TaskReceived");
+      expect(second.message).toContain("run directory already exists");
+      await expect(stat(second.summaryPath)).resolves.toBeTruthy();
+      await expect(readFile(second.tracePath, "utf8")).resolves.toContain("run_failed");
+
+      const summary = JSON.parse(await readFile(second.summaryPath, "utf8")) as {
+        status: string;
+        message?: string;
+      };
+      expect(summary.status).toBe("FAIL");
+      expect(summary.message).toContain("run directory already exists");
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("overwriteRun allows rerun with the same runId", async () => {
+    const root = await tempDir("nlah-runtime-overwrite-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const cwd = process.cwd();
+
+    process.chdir(root);
+    try {
+      const first = await runHarness(path.join(cwd, "harnesses/crew.mvp.yaml"), repo, taskPath, {
+        runId: "runtime-overwrite-test"
+      });
+      const second = await runHarness(path.join(cwd, "harnesses/crew.mvp.yaml"), repo, taskPath, {
+        runId: "runtime-overwrite-test",
+        overwriteRun: true
+      });
+
+      expect(first.status).toBe("PASS");
+      expect(second.status).toBe("PASS");
+      expect(second.finalState).toBe("PullRequestReady");
+      await expect(readFile(path.join(second.artifactRoot, "final.patch"), "utf8")).resolves.toContain(
+        "return a + b;"
+      );
+    } finally {
+      process.chdir(cwd);
+    }
+  });
 });

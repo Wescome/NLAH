@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, copyFile, writeFile } from "node:fs/promises";
+import { mkdir, copyFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadHarness, compileHarness } from "./compiler.js";
 import { ArtifactManager } from "./artifacts.js";
@@ -15,12 +15,14 @@ export type RunHarnessOptions = {
   runId?: string;
   workerAdapter?: WorkerAdapter;
   workerRegistry?: WorkerRegistry;
+  overwriteRun?: boolean;
 };
 
 type NormalizedRunHarnessOptions = {
   runId: string;
   workerAdapter?: WorkerAdapter;
   workerRegistry?: WorkerRegistry;
+  overwriteRun: boolean;
 };
 
 function normalizeRunHarnessOptions(
@@ -30,15 +32,26 @@ function normalizeRunHarnessOptions(
   if (typeof runIdOrOptions === "string" || runIdOrOptions === undefined) {
     return {
       runId: runIdOrOptions ?? randomUUID(),
-      ...(workerAdapter === undefined ? {} : { workerAdapter })
+      ...(workerAdapter === undefined ? {} : { workerAdapter }),
+      overwriteRun: false
     };
   }
 
   return {
     runId: runIdOrOptions.runId ?? randomUUID(),
     ...(runIdOrOptions.workerAdapter === undefined ? {} : { workerAdapter: runIdOrOptions.workerAdapter }),
-    ...(runIdOrOptions.workerRegistry === undefined ? {} : { workerRegistry: runIdOrOptions.workerRegistry })
+    ...(runIdOrOptions.workerRegistry === undefined ? {} : { workerRegistry: runIdOrOptions.workerRegistry }),
+    overwriteRun: runIdOrOptions.overwriteRun ?? false
   };
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  try {
+    await stat(target);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function validateWorkerCreatedArtifacts(declaredOutputs: string[], createdArtifacts: string[]): void {
@@ -108,6 +121,24 @@ export async function runHarness(
   const artifactRoot = path.join(runRoot, "artifacts");
   const tracePath = path.join(stateRoot, "task_history.jsonl");
   const summaryPath = path.join(runRoot, "summary.json");
+
+  if (options.overwriteRun) {
+    await rm(runRoot, { recursive: true, force: true });
+  } else if (await pathExists(runRoot)) {
+    const artifacts = new ArtifactManager(runRoot, compiled.spec);
+    const logger = new TraceLogger(tracePath, options.runId);
+    const resultBase = {
+      runId: options.runId,
+      finalState: compiled.startState,
+      runRoot,
+      artifactRoot,
+      tracePath,
+      summaryPath
+    };
+    await logger.emit("run_started", { fromState: compiled.startState });
+    return failRun(logger, resultBase, `run directory already exists: ${runRoot}`, artifacts);
+  }
+
   await mkdir(stateRoot, { recursive: true });
   await mkdir(artifactRoot, { recursive: true });
   await copyFile(resolvedTaskPath, path.join(runRoot, "TASK.md"));
