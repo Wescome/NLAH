@@ -63,6 +63,8 @@ By default, the runtime refuses to reuse an existing `runs/<runId>` directory an
 
 The CLI currently supports `--worker deterministic`. Programmatic callers can register command, script, or provider-neutral LLM workers directly.
 
+`LocalCliCodingWorkerAdapter` is a generic local command adapter for coding CLIs such as Aider, Codex CLI, Claude Code, OpenHands CLI, or custom local tools. It executes one configured `string[]` command per stage through `ShellAdapter`, receives the same `StageContext` as other workers, and reports declared outputs back to the runtime artifact contract.
+
 ## `WorkerAdapter`
 
 ```ts
