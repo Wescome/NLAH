@@ -253,4 +253,101 @@ describe("runtime", () => {
       process.chdir(cwd);
     }
   });
+
+  it("fails when worker returns an undeclared artifact", async () => {
+    const root = await tempDir("nlah-runtime-undeclared-artifact-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const cwd = process.cwd();
+
+    class UndeclaredArtifactWorker implements WorkerAdapter {
+      async execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput> {
+        await artifacts.writeText(input.declaredOutputs[0]!, "declared");
+        return { createdArtifacts: [input.declaredOutputs[0]!, "RepoMap"] };
+      }
+    }
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(
+        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        repo,
+        taskPath,
+        "runtime-undeclared-artifact-test",
+        new UndeclaredArtifactWorker()
+      );
+
+      expect(result.status).toBe("FAIL");
+      expect(result.message).toContain("undeclared artifact");
+      await expect(readFile(result.tracePath, "utf8")).resolves.toContain("run_failed");
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("fails when worker writes required file but omits it from createdArtifacts", async () => {
+    const root = await tempDir("nlah-runtime-missing-created-artifact-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const cwd = process.cwd();
+
+    class MissingCreatedArtifactWorker implements WorkerAdapter {
+      async execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput> {
+        for (const output of input.declaredOutputs) {
+          await artifacts.writeText(output, "declared");
+        }
+        return { createdArtifacts: [] };
+      }
+    }
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(
+        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        repo,
+        taskPath,
+        "runtime-missing-created-artifact-test",
+        new MissingCreatedArtifactWorker()
+      );
+
+      expect(result.status).toBe("FAIL");
+      expect(result.message).toContain("missing declared artifact");
+      await expect(readFile(result.tracePath, "utf8")).resolves.toContain("run_failed");
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("fails when worker reports declared artifact but does not write file", async () => {
+    const root = await tempDir("nlah-runtime-unwritten-artifact-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const cwd = process.cwd();
+
+    class UnwrittenArtifactWorker implements WorkerAdapter {
+      async execute(input: WorkerInput): Promise<WorkerOutput> {
+        return { createdArtifacts: [...input.declaredOutputs] };
+      }
+    }
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(
+        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        repo,
+        taskPath,
+        "runtime-unwritten-artifact-test",
+        new UnwrittenArtifactWorker()
+      );
+
+      expect(result.status).toBe("FAIL");
+      expect(result.message).toContain("missing required output artifact");
+      await expect(readFile(result.tracePath, "utf8")).resolves.toContain("run_failed");
+    } finally {
+      process.chdir(cwd);
+    }
+  });
 });

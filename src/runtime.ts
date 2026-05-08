@@ -41,6 +41,23 @@ function normalizeRunHarnessOptions(
   };
 }
 
+function validateWorkerCreatedArtifacts(declaredOutputs: string[], createdArtifacts: string[]): void {
+  const declared = new Set(declaredOutputs);
+  const created = new Set(createdArtifacts);
+
+  for (const artifact of created) {
+    if (!declared.has(artifact)) {
+      throw new RuntimeError(`undeclared artifact returned by worker: ${artifact}`);
+    }
+  }
+
+  for (const artifact of declared) {
+    if (!created.has(artifact)) {
+      throw new RuntimeError(`missing declared artifact from worker result: ${artifact}`);
+    }
+  }
+}
+
 async function failRun(
   logger: TraceLogger,
   result: Omit<RuntimeResult, "status">,
@@ -148,6 +165,7 @@ export async function runHarness(
         declaredOutputs: stageEntry.spec.outputs
       };
       const workerOutput = await stageWorker.execute(workerInput, artifacts);
+      validateWorkerCreatedArtifacts(stageEntry.spec.outputs, workerOutput.createdArtifacts);
 
       for (const artifact of workerOutput.createdArtifacts) {
         state.artifacts[artifact] = await artifacts.status(artifact);
