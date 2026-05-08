@@ -12,3 +12,4 @@ export * from "./workers.js";
 export * from "./context.js";
 export * from "./command_worker.js";
 export * from "./script_worker.js";
+export * from "./worker_registry.js";
