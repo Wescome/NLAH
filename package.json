@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "run:mvp": "tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md",
     "run:script-demo": "tsx examples/script_worker_demo.ts",
+    "run:mock-llm-demo": "tsx examples/mock_llm_demo.ts",
     "verify": "pnpm typecheck && pnpm test"
   },
   "dependencies": {

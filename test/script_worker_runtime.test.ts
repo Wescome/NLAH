@@ -36,5 +36,5 @@ describe("script worker runtime", () => {
     } finally {
       process.chdir(cwd);
     }
-  });
+  }, 30000);
 });

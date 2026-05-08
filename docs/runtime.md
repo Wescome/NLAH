@@ -80,6 +80,8 @@ The runtime validates `WorkerOutput.createdArtifacts`:
 
 No OpenAI, Anthropic, Codex, Claude, LangGraph, or external API calls are implemented in this adapter.
 
+`pnpm run:mock-llm-demo` runs the full MVP harness through `LlmWorkerAdapter` with a fake local provider only. It is a runtime wiring demo and makes no external calls.
+
 ## `StageContext`
 
 `StageContext` is the structured execution packet passed to workers:
