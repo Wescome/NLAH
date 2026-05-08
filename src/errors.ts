@@ -36,6 +36,13 @@ export class GateError extends NlahError {
   }
 }
 
+export class ContextError extends NlahError {
+  constructor(message: string) {
+    super("CONTEXT_ERROR", message);
+    this.name = "ContextError";
+  }
+}
+
 export class RuntimeError extends NlahError {
   constructor(message: string) {
     super("RUNTIME_ERROR", message);

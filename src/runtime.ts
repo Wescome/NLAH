@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, copyFile, readFile } from "node:fs/promises";
+import { mkdir, copyFile } from "node:fs/promises";
 import path from "node:path";
 import { loadHarness, compileHarness } from "./compiler.js";
 import { ArtifactManager } from "./artifacts.js";
@@ -8,22 +8,7 @@ import { evaluateGateSpec } from "./gates.js";
 import type { RuntimeResult, RuntimeState } from "./state.js";
 import { RuntimeError } from "./errors.js";
 import { DeterministicWorkerAdapter, type WorkerAdapter } from "./workers.js";
-
-function roleSlug(roleName: string): string {
-  return roleName
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/\s+/g, "_")
-    .toLowerCase();
-}
-
-async function loadRolePrompt(harnessPath: string, roleName: string): Promise<string | undefined> {
-  const rolePath = path.resolve(path.dirname(harnessPath), "..", "roles", `${roleSlug(roleName)}.md`);
-  try {
-    return await readFile(rolePath, "utf8");
-  } catch {
-    return undefined;
-  }
-}
+import { buildStageContext, roleNameToFileName } from "./context.js";
 
 async function failRun(
   logger: TraceLogger,
@@ -101,14 +86,26 @@ export async function runHarness(
         toState: stageEntry.spec.to
       });
 
-      const rolePrompt = await loadRolePrompt(resolvedHarnessPath, stageEntry.spec.role);
+      const rolePath = path.resolve(
+        path.dirname(resolvedHarnessPath),
+        "..",
+        "roles",
+        roleNameToFileName(stageEntry.spec.role)
+      );
+      const context = await buildStageContext({
+        taskPath: resolvedTaskPath,
+        rolePath,
+        declaredInputs: stageEntry.spec.inputs,
+        declaredOutputs: stageEntry.spec.outputs,
+        artifacts
+      });
       const workerInput = {
         stageName: stageEntry.name,
         roleName: stageEntry.spec.role,
+        context,
         state,
         declaredInputs: stageEntry.spec.inputs,
-        declaredOutputs: stageEntry.spec.outputs,
-        ...(rolePrompt === undefined ? {} : { rolePrompt })
+        declaredOutputs: stageEntry.spec.outputs
       };
       const workerOutput = await workerAdapter.execute(workerInput, artifacts);
 

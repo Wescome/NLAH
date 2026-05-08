@@ -66,6 +66,8 @@ describe("runtime", () => {
 
       async execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput> {
         calls.push(input.stageName);
+        expect(input.context.taskText).toContain("Fix `add(a, b)`");
+        expect(input.context.outputArtifactPaths).toBeDefined();
         return this.deterministic.execute(input, artifacts);
       }
     }

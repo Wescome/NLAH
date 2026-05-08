@@ -1,10 +1,12 @@
 import type { ArtifactManager } from "./artifacts.js";
+import type { StageContext } from "./context.js";
 import type { RuntimeState } from "./state.js";
 
 export type WorkerInput = {
   stageName: string;
   roleName: string;
   rolePrompt?: string;
+  context: StageContext;
   state: RuntimeState;
   declaredInputs: string[];
   declaredOutputs: string[];
