@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { RuntimeError } from "./errors.js";
 import { buildCrewManifestFromFile, type CrewManifest } from "./manifest.js";
-import { runHarness } from "./runtime.js";
+import { runHarness, type RunHarnessOptions } from "./runtime.js";
 import type { RuntimeResult } from "./state.js";
 import { validateHarnessFile, type ValidationReport } from "./validator.js";
 import { WorkerRegistry } from "./worker_registry.js";
@@ -100,6 +100,25 @@ export function createCliWorkerRegistry(workerName?: string): WorkerRegistry | u
   throw new RuntimeError(`unsupported CLI worker: ${workerName}`);
 }
 
+export function buildRunHarnessOptions(args: {
+  runId?: string;
+  worker?: string;
+  overwriteRun?: boolean;
+}): string | RunHarnessOptions | undefined {
+  const workerRegistry = createCliWorkerRegistry(args.worker);
+  const overwriteRun = args.overwriteRun ?? false;
+
+  if (!workerRegistry && !overwriteRun) {
+    return args.runId;
+  }
+
+  return {
+    ...(args.runId === undefined ? {} : { runId: args.runId }),
+    ...(workerRegistry === undefined ? {} : { workerRegistry }),
+    ...(overwriteRun ? { overwriteRun: true } : {})
+  };
+}
+
 export function createProgram(): Command {
   const program = new Command();
 
@@ -115,6 +134,7 @@ export function createProgram(): Command {
     .requiredOption("--task <path>", "Task file path")
     .option("--run-id <id>", "Run identifier")
     .option("--worker <name>", "Worker adapter name")
+    .option("--overwrite-run", "Delete an existing run directory before starting")
     .option("--json", "Print RuntimeResult as JSON")
     .action(
       async (options: {
@@ -123,17 +143,15 @@ export function createProgram(): Command {
         task: string;
         runId?: string;
         worker?: string;
+        overwriteRun?: boolean;
         json?: boolean;
       }) => {
-        const workerRegistry = createCliWorkerRegistry(options.worker);
-        const result = workerRegistry
-          ? await runHarness(
-              options.harness,
-              options.repo,
-              options.task,
-              options.runId === undefined ? { workerRegistry } : { runId: options.runId, workerRegistry }
-            )
-          : await runHarness(options.harness, options.repo, options.task, options.runId);
+        const runOptions = buildRunHarnessOptions({
+          ...(options.runId === undefined ? {} : { runId: options.runId }),
+          ...(options.worker === undefined ? {} : { worker: options.worker }),
+          ...(options.overwriteRun === undefined ? {} : { overwriteRun: options.overwriteRun })
+        });
+        const result = await runHarness(options.harness, options.repo, options.task, runOptions);
         console.log(options.json ? formatRunResultJson(result) : formatRunResultText(result));
         process.exitCode = result.status === "PASS" ? 0 : 1;
       }

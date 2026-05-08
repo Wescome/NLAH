@@ -50,7 +50,7 @@ runHarness(harnessPath, repoPath, taskPath, runId, workerAdapter)
 
 If `workerAdapter` is provided, it runs every stage. If `workerRegistry` is provided, the runtime uses `stage.spec.worker` when present, otherwise the registry default. If neither is provided, the runtime uses `DeterministicWorkerAdapter`.
 
-By default, the runtime refuses to reuse an existing `runs/<runId>` directory and returns a `FAIL` result with a summary and trace when possible. Set `overwriteRun: true` to remove the existing run directory before starting.
+By default, the runtime refuses to reuse an existing `runs/<runId>` directory and returns a `FAIL` result with a summary and trace when possible. Set `overwriteRun: true`, or pass `--overwrite-run` to `nlah run`, to remove the existing run directory before starting.
 
 ## `WorkerRegistry`
 

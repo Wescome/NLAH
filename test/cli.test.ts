@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildRunHarnessOptions,
   createCliWorkerRegistry,
   formatCrewManifestJson,
   formatCrewManifestText,
@@ -70,6 +71,33 @@ describe("cli worker registry", () => {
   it("throws RuntimeError for unsupported workers", () => {
     expect(() => createCliWorkerRegistry("script")).toThrow(RuntimeError);
     expect(() => createCliWorkerRegistry("script")).toThrow("unsupported CLI worker: script");
+  });
+});
+
+describe("cli run options", () => {
+  it("includes overwriteRun when requested", () => {
+    expect(buildRunHarnessOptions({ overwriteRun: true })).toMatchObject({ overwriteRun: true });
+  });
+
+  it("returns runId for simple old-style run options", () => {
+    expect(buildRunHarnessOptions({ runId: "cli-run" })).toBe("cli-run");
+  });
+
+  it("includes runId with composite options", () => {
+    expect(buildRunHarnessOptions({ runId: "cli-run", overwriteRun: true })).toMatchObject({
+      runId: "cli-run",
+      overwriteRun: true
+    });
+  });
+
+  it("includes workerRegistry for deterministic worker", () => {
+    const options = buildRunHarnessOptions({ worker: "deterministic" });
+
+    expect(options).toMatchObject({ workerRegistry: expect.any(WorkerRegistry) });
+  });
+
+  it("unsupported worker still throws RuntimeError", () => {
+    expect(() => buildRunHarnessOptions({ worker: "script" })).toThrow(RuntimeError);
   });
 });
 
