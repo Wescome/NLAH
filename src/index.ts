@@ -10,3 +10,4 @@ export * from "./adapters.js";
 export * from "./errors.js";
 export * from "./workers.js";
 export * from "./context.js";
+export * from "./command_worker.js";
