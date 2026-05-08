@@ -15,3 +15,4 @@ export * from "./script_worker.js";
 export * from "./worker_registry.js";
 export * from "./llm_worker.js";
 export * from "./validator.js";
+export * from "./manifest.js";

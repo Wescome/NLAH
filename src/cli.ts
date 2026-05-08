@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { RuntimeError } from "./errors.js";
+import { buildCrewManifestFromFile, type CrewManifest } from "./manifest.js";
 import { runHarness } from "./runtime.js";
 import type { RuntimeResult } from "./state.js";
 import { validateHarnessFile, type ValidationReport } from "./validator.js";
@@ -65,6 +66,28 @@ export function formatValidationReportJson(report: ValidationReport): string {
   return JSON.stringify(report);
 }
 
+export function formatCrewManifestText(manifest: CrewManifest): string {
+  const lines = [
+    `Crew: ${manifest.harnessName}`,
+    `Task Family: ${manifest.taskFamily}`,
+    `Stage Order: ${manifest.stageOrder.join(" -> ")}`,
+    "Stages:"
+  ];
+
+  for (const stage of manifest.stages) {
+    const worker = stage.worker === undefined ? "" : ` | worker=${stage.worker}`;
+    lines.push(
+      `- ${stage.name}: ${stage.from} -> ${stage.to} | role=${stage.role}${worker} | inputs=[${stage.inputs.join(", ")}] | outputs=[${stage.outputs.join(", ")}]`
+    );
+  }
+
+  return lines.join("\n");
+}
+
+export function formatCrewManifestJson(manifest: CrewManifest): string {
+  return JSON.stringify(manifest);
+}
+
 export function createCliWorkerRegistry(workerName?: string): WorkerRegistry | undefined {
   if (workerName === undefined) {
     return undefined;
@@ -124,6 +147,16 @@ export function createProgram(): Command {
       const report = await validateHarnessFile(options.harness);
       console.log(options.json ? formatValidationReportJson(report) : formatValidationReportText(report));
       process.exitCode = report.status === "VALID" ? 0 : 1;
+    });
+
+  program
+    .command("manifest")
+    .requiredOption("--harness <path>", "Harness YAML path")
+    .option("--json", "Print crew manifest as JSON")
+    .action(async (options: { harness: string; json?: boolean }) => {
+      const manifest = await buildCrewManifestFromFile(options.harness);
+      console.log(options.json ? formatCrewManifestJson(manifest) : formatCrewManifestText(manifest));
+      process.exitCode = 0;
     });
 
   return program;

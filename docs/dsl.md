@@ -28,3 +28,10 @@ Validate a crew harness without running it:
 pnpm tsx src/cli.ts validate --harness harnesses/crew.mvp.yaml
 pnpm tsx src/cli.ts validate --harness harnesses/crew.mvp.yaml --json
 ```
+
+Inspect a static crew manifest without running it:
+
+```bash
+pnpm tsx src/cli.ts manifest --harness harnesses/crew.mvp.yaml
+pnpm tsx src/cli.ts manifest --harness harnesses/crew.mvp.yaml --json
+```

@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   createCliWorkerRegistry,
+  formatCrewManifestJson,
+  formatCrewManifestText,
   formatRunResultJson,
   formatRunResultText,
   formatValidationReportJson,
   formatValidationReportText
 } from "../src/cli.js";
 import { RuntimeError } from "../src/errors.js";
+import type { CrewManifest } from "../src/manifest.js";
 import type { RuntimeResult } from "../src/state.js";
 import type { ValidationReport } from "../src/validator.js";
 import { WorkerRegistry } from "../src/worker_registry.js";
@@ -92,6 +95,47 @@ describe("cli validation formatters", () => {
     const parsed = JSON.parse(formatValidationReportJson(report)) as ValidationReport;
 
     expect(parsed.status).toBe("VALID");
+    expect(parsed.stageOrder).toEqual(["CONTRACT", "MAP"]);
+  });
+});
+
+describe("cli manifest formatters", () => {
+  const manifest: CrewManifest = {
+    harnessName: "CREW_MVP",
+    taskFamily: "repository_issue_resolution",
+    objective: "test objective",
+    stageOrder: ["CONTRACT", "MAP"],
+    startState: "TaskReceived",
+    terminalStates: ["RepoMapped"],
+    artifacts: {
+      IssueContract: { path: "artifacts/issue_contract.md", required: true }
+    },
+    stages: [
+      {
+        name: "CONTRACT",
+        from: "TaskReceived",
+        to: "IssueContracted",
+        role: "Cartographer",
+        inputs: [],
+        outputs: ["IssueContract"],
+        gates: ["exists: IssueContract"]
+      }
+    ]
+  };
+
+  it("text formatter includes crew and stage lines", () => {
+    const output = formatCrewManifestText(manifest);
+
+    expect(output).toContain("Crew: CREW_MVP");
+    expect(output).toContain(
+      "- CONTRACT: TaskReceived -> IssueContracted | role=Cartographer | inputs=[] | outputs=[IssueContract]"
+    );
+  });
+
+  it("json formatter parses back to manifest", () => {
+    const parsed = JSON.parse(formatCrewManifestJson(manifest)) as CrewManifest;
+
+    expect(parsed.harnessName).toBe("CREW_MVP");
     expect(parsed.stageOrder).toEqual(["CONTRACT", "MAP"]);
   });
 });
