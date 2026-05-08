@@ -184,7 +184,7 @@ export async function runScriptWorkerDemo(): Promise<void> {
     workers: { script: scriptWorker }
   });
 
-  const result = await runHarness("harnesses/coding_swarm.mvp.yaml", "examples/target_repo_stub", "examples/TASK.md", {
+  const result = await runHarness("harnesses/crew.mvp.yaml", "examples/target_repo_stub", "examples/TASK.md", {
     runId: "script-worker-demo",
     workerRegistry
   });

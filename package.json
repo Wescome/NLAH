@@ -1,7 +1,7 @@
 {
   "name": "nlah",
   "version": "0.1.0",
-  "description": "Natural-Language Agent Harness runtime for artifact-gated coding swarms.",
+  "description": "Natural-Language Agent Harness runtime for artifact-gated crews.",
   "type": "module",
   "bin": {
     "nlah": "./dist/cli.js"
@@ -12,9 +12,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "run:mvp": "tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md",
+    "run:mvp": "tsx src/cli.ts run --harness harnesses/crew.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md",
     "run:script-demo": "tsx examples/script_worker_demo.ts",
     "run:mock-llm-demo": "tsx examples/mock_llm_demo.ts",
+    "run:legacy-coding-swarm": "tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md",
     "verify": "pnpm typecheck && pnpm test"
   },
   "dependencies": {

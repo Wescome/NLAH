@@ -18,7 +18,7 @@ describe("runtime", () => {
     process.chdir(root);
     try {
       const result = await runHarness(
-        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        path.join(cwd, "harnesses/crew.mvp.yaml"),
         repo,
         taskPath,
         "runtime-test"
@@ -80,7 +80,7 @@ describe("runtime", () => {
     process.chdir(root);
     try {
       const result = await runHarness(
-        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        path.join(cwd, "harnesses/crew.mvp.yaml"),
         repo,
         taskPath,
         "runtime-worker-trace-order-test"
@@ -121,7 +121,7 @@ describe("runtime", () => {
     process.chdir(root);
     try {
       const result = await runHarness(
-        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        path.join(cwd, "harnesses/crew.mvp.yaml"),
         repo,
         taskPath,
         "runtime-worker-message-test",
@@ -160,7 +160,7 @@ describe("runtime", () => {
     process.chdir(root);
     try {
       const result = await runHarness(
-        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        path.join(cwd, "harnesses/crew.mvp.yaml"),
         repo,
         taskPath,
         "runtime-worker-failure-trace-test",
@@ -209,7 +209,7 @@ describe("runtime", () => {
     process.chdir(root);
     try {
       const result = await runHarness(
-        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        path.join(cwd, "harnesses/crew.mvp.yaml"),
         repo,
         taskPath,
         "runtime-worker-test",
@@ -273,7 +273,7 @@ describe("runtime", () => {
     process.chdir(root);
     try {
       const result = await runHarness(
-        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        path.join(cwd, "harnesses/crew.mvp.yaml"),
         repo,
         taskPath,
         "runtime-fake-worker-test",
@@ -307,7 +307,7 @@ describe("runtime", () => {
     process.chdir(root);
     try {
       const result = await runHarness(
-        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        path.join(cwd, "harnesses/crew.mvp.yaml"),
         repo,
         taskPath,
         {
@@ -415,7 +415,7 @@ describe("runtime", () => {
     process.chdir(root);
     try {
       const result = await runHarness(
-        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        path.join(cwd, "harnesses/crew.mvp.yaml"),
         repo,
         taskPath,
         "runtime-undeclared-artifact-test",
@@ -449,7 +449,7 @@ describe("runtime", () => {
     process.chdir(root);
     try {
       const result = await runHarness(
-        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        path.join(cwd, "harnesses/crew.mvp.yaml"),
         repo,
         taskPath,
         "runtime-missing-created-artifact-test",
@@ -480,7 +480,7 @@ describe("runtime", () => {
     process.chdir(root);
     try {
       const result = await runHarness(
-        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        path.join(cwd, "harnesses/crew.mvp.yaml"),
         repo,
         taskPath,
         "runtime-unwritten-artifact-test",

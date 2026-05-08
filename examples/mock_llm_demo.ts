@@ -156,7 +156,7 @@ export async function runMockLlmDemo(): Promise<void> {
     workers: { "mock-llm": createMvpMockLlmWorkerAdapter() }
   });
 
-  const result = await runHarness("harnesses/coding_swarm.mvp.yaml", "examples/target_repo_stub", "examples/TASK.md", {
+  const result = await runHarness("harnesses/crew.mvp.yaml", "examples/target_repo_stub", "examples/TASK.md", {
     runId: "mock-llm-demo",
     workerRegistry
   });

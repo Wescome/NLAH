@@ -1,6 +1,8 @@
-# Runtime
+# Crew Runtime
 
-The NLAH runtime executes a compiled harness as an artifact-gated WorkGraph. A stage is complete only after its worker returns declared artifacts, those artifacts exist on disk, and the stage gates pass.
+The NLAH runtime executes a compiled crew harness as an artifact-gated WorkGraph. A crew is a role-based execution unit made of stages, roles, artifacts, workers, gates, and traces. Coding is currently the first crew specialization, but the runtime is not limited to coding.
+
+A stage is complete only after its worker returns declared artifacts, those artifacts exist on disk, and the stage gates pass.
 
 ## `runHarness`
 
@@ -16,7 +18,7 @@ runHarness(
 
 The runtime:
 
-- loads and compiles the harness
+- loads and compiles the crew harness
 - creates `runs/<run_id>/`
 - copies the task file into the run directory
 - initializes `ArtifactManager`
@@ -56,7 +58,7 @@ If `workerAdapter` is provided, it runs every stage. If `workerRegistry` is prov
 - supports a configurable default worker
 - throws `RuntimeError` for unknown workers
 
-The CLI currently supports `--worker deterministic`. Programmatic callers can register command or script workers directly.
+The CLI currently supports `--worker deterministic`. Programmatic callers can register command, script, or provider-neutral LLM workers directly.
 
 ## `WorkerAdapter`
 
@@ -80,7 +82,7 @@ The runtime validates `WorkerOutput.createdArtifacts`:
 
 No OpenAI, Anthropic, Codex, Claude, LangGraph, or external API calls are implemented in this adapter.
 
-`pnpm run:mock-llm-demo` runs the full MVP harness through `LlmWorkerAdapter` with a fake local provider only. It is a runtime wiring demo and makes no external calls.
+`pnpm run:mock-llm-demo` runs the full MVP crew harness through `LlmWorkerAdapter` with a fake local provider only. It is a runtime wiring demo and makes no external calls.
 
 ## `StageContext`
 

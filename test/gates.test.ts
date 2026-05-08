@@ -17,7 +17,7 @@ async function fixture(): Promise<{ artifacts: ArtifactManager; state: RuntimeSt
       currentState: "TaskReceived",
       taskPath: path.join(root, "TASK.md"),
       repoPath: repo,
-      harnessPath: path.resolve("harnesses/coding_swarm.mvp.yaml"),
+      harnessPath: path.resolve("harnesses/crew.mvp.yaml"),
       runRoot: root,
       stateRoot: path.join(root, "state"),
       artifactRoot: path.join(root, "artifacts"),

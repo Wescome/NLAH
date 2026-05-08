@@ -6,6 +6,12 @@ import { validSpec } from "./helpers.js";
 
 describe("compiler", () => {
   it("valid harness compiles", async () => {
+    const compiled = compileHarness(await loadHarness(path.resolve("harnesses/crew.mvp.yaml")));
+    expect(compiled.startState).toBe("TaskReceived");
+    expect(compiled.terminalStates).toEqual(["PullRequestReady"]);
+  });
+
+  it("legacy coding_swarm harness still compiles", async () => {
     const compiled = compileHarness(await loadHarness(path.resolve("harnesses/coding_swarm.mvp.yaml")));
     expect(compiled.startState).toBe("TaskReceived");
     expect(compiled.terminalStates).toEqual(["PullRequestReady"]);
@@ -42,7 +48,7 @@ describe("compiler", () => {
   });
 
   it("stage order equals MVP sequence", async () => {
-    const compiled = compileHarness(await loadHarness(path.resolve("harnesses/coding_swarm.mvp.yaml")));
+    const compiled = compileHarness(await loadHarness(path.resolve("harnesses/crew.mvp.yaml")));
     expect(compiled.stageOrder).toEqual(["CONTRACT", "MAP", "PATCH", "VERIFY", "RELEASE"]);
   });
 });

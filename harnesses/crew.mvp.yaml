@@ -1,9 +1,7 @@
-# Deprecated: use harnesses/crew.mvp.yaml.
-
 nlahspec: "0.1"
 
 harness:
-  name: CODING_SWARM_MVP
+  name: CREW_MVP
   task_family: repository_issue_resolution
   objective: >
     Resolve a repository-grounded issue by producing a patch,

@@ -19,7 +19,7 @@ async function workerFixture(): Promise<{
     currentState: "PatchCandidate",
     taskPath: path.join(root, "TASK.md"),
     repoPath: repo,
-    harnessPath: path.resolve("harnesses/coding_swarm.mvp.yaml"),
+    harnessPath: path.resolve("harnesses/crew.mvp.yaml"),
     runRoot: root,
     stateRoot: path.join(root, "state"),
     artifactRoot: path.join(root, "artifacts"),

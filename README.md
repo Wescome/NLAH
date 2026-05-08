@@ -1,19 +1,21 @@
 # NLAH
 
-NLAH is a TypeScript-first Natural-Language Agent Harness runtime for artifact-gated coding swarms.
+NLAH is a TypeScript-first Natural-Language Agent Harness runtime for artifact-gated crews.
 
-It is not an LLM coding agent. It is a small language workbench for making the organization around coding agents explicit: roles, stages, artifacts, gates, state transitions, worker bindings, and trace records are represented as executable harness/runtime artifacts instead of hidden controller behavior.
+It is not an LLM coding agent. It is a language workbench for making crew organization explicit: roles, stages, artifacts, workers, gates, state transitions, and trace records are represented as executable harness/runtime artifacts instead of hidden controller behavior.
+
+A crew is a role-based execution unit made of stages, roles, artifacts, workers, gates, and traces. Coding is the first crew specialization in this repository, but the runtime is not limited to coding.
 
 ## Current v0 Status
 
-The v0 runtime can execute the MVP coding swarm harness end to end:
+The v0 runtime can execute the MVP crew harness end to end:
 
 ```text
-Harness YAML
+Crew harness YAML
 -> Zod schema
 -> compiler
 -> WorkGraph
--> stage runtime
+-> crew runtime
 -> worker adapter
 -> artifact manager
 -> gates
@@ -23,7 +25,7 @@ Harness YAML
 
 Current capabilities:
 
-- YAML harness loading and typed Zod validation
+- YAML crew harness loading and typed Zod validation
 - deterministic WorkGraph compilation and traversal
 - artifact-gated stage completion
 - executable gates, including `git apply --check`
@@ -32,6 +34,7 @@ Current capabilities:
 - CLI text output and JSON output
 - pluggable worker adapter interface
 - worker registry and stage worker binding support
+- provider-neutral LLM worker interface with local mock demo only
 
 ## Install
 
@@ -46,6 +49,7 @@ pnpm typecheck
 pnpm test
 pnpm run:mvp
 pnpm run:script-demo
+pnpm run:mock-llm-demo
 ```
 
 ## Run The Deterministic MVP
@@ -57,7 +61,7 @@ pnpm run:mvp
 Equivalent direct CLI command:
 
 ```bash
-pnpm tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md
+pnpm tsx src/cli.ts run --harness harnesses/crew.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md
 ```
 
 Expected status:
@@ -67,12 +71,26 @@ Status: PASS
 State: PullRequestReady
 ```
 
+The legacy harness path remains available for compatibility:
+
+```bash
+pnpm run:legacy-coding-swarm
+```
+
 ## Script Worker Demo
 
-The script worker demo runs the same MVP harness through `ScriptWorkerAdapter` and `WorkerRegistry` without changing runtime code:
+The script worker demo runs the same MVP crew harness through `ScriptWorkerAdapter` and `WorkerRegistry` without changing runtime code:
 
 ```bash
 pnpm run:script-demo
+```
+
+## Mock LLM Demo
+
+The mock LLM demo runs the same MVP crew harness through `LlmWorkerAdapter` with a fake local provider only. It makes no external API calls:
+
+```bash
+pnpm run:mock-llm-demo
 ```
 
 ## CLI JSON Output
@@ -80,7 +98,7 @@ pnpm run:script-demo
 Automation and CI callers can request a single JSON object on stdout:
 
 ```bash
-pnpm tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md --json
+pnpm tsx src/cli.ts run --harness harnesses/crew.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md --json
 ```
 
 ## CLI Worker Selection
@@ -88,7 +106,7 @@ pnpm tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo example
 The CLI currently exposes deterministic worker selection:
 
 ```bash
-pnpm tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md --worker deterministic
+pnpm tsx src/cli.ts run --harness harnesses/crew.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md --worker deterministic
 ```
 
 Unsupported CLI worker names fail before runtime execution with `unsupported CLI worker: <name>`.
@@ -101,9 +119,11 @@ Unsupported CLI worker names fail before runtime execution with `unsupported CLI
 
 `ScriptWorkerAdapter`: controlled local-script adapter API that executes stage-specific `string[]` commands through `ShellAdapter`. It does not use `shell=true`.
 
+`LlmWorkerAdapter`: provider-neutral interface that accepts an injected provider. The repository includes only a fake local provider demo.
+
 ## Not Yet Implemented
 
-- LLM workers
+- external LLM provider integrations
 - LangGraph integration
 - GitHub PR automation
 - cloud execution

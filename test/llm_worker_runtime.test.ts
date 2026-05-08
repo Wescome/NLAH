@@ -22,7 +22,7 @@ describe("llm worker runtime", () => {
 
     process.chdir(root);
     try {
-      const result = await runHarness(path.join(cwd, "harnesses/coding_swarm.mvp.yaml"), repo, taskPath, {
+      const result = await runHarness(path.join(cwd, "harnesses/crew.mvp.yaml"), repo, taskPath, {
         runId: "llm-worker-runtime-test",
         workerRegistry
       });
