@@ -21,3 +21,10 @@ harnesses/crew.mvp.yaml
 ```
 
 The legacy `harnesses/coding_swarm.mvp.yaml` path remains available for compatibility.
+
+Validate a crew harness without running it:
+
+```bash
+pnpm tsx src/cli.ts validate --harness harnesses/crew.mvp.yaml
+pnpm tsx src/cli.ts validate --harness harnesses/crew.mvp.yaml --json
+```

@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { createCliWorkerRegistry, formatRunResultJson, formatRunResultText } from "../src/cli.js";
+import {
+  createCliWorkerRegistry,
+  formatRunResultJson,
+  formatRunResultText,
+  formatValidationReportJson,
+  formatValidationReportText
+} from "../src/cli.js";
 import { RuntimeError } from "../src/errors.js";
 import type { RuntimeResult } from "../src/state.js";
+import type { ValidationReport } from "../src/validator.js";
 import { WorkerRegistry } from "../src/worker_registry.js";
 
 function resultFixture(overrides: Partial<RuntimeResult> = {}): RuntimeResult {
@@ -60,5 +67,31 @@ describe("cli worker registry", () => {
   it("throws RuntimeError for unsupported workers", () => {
     expect(() => createCliWorkerRegistry("script")).toThrow(RuntimeError);
     expect(() => createCliWorkerRegistry("script")).toThrow("unsupported CLI worker: script");
+  });
+});
+
+describe("cli validation formatters", () => {
+  const report: ValidationReport = {
+    status: "VALID",
+    harnessPath: "/tmp/crew.mvp.yaml",
+    errors: [],
+    warnings: [],
+    stageOrder: ["CONTRACT", "MAP"],
+    startState: "TaskReceived",
+    terminalStates: ["RepoMapped"]
+  };
+
+  it("text formatter includes validation status and stage order", () => {
+    const output = formatValidationReportText(report);
+
+    expect(output).toContain("Status: VALID");
+    expect(output).toContain("Stage Order: CONTRACT -> MAP");
+  });
+
+  it("json formatter parses back to validation report", () => {
+    const parsed = JSON.parse(formatValidationReportJson(report)) as ValidationReport;
+
+    expect(parsed.status).toBe("VALID");
+    expect(parsed.stageOrder).toEqual(["CONTRACT", "MAP"]);
   });
 });

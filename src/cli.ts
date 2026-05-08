@@ -5,6 +5,7 @@ import { Command } from "commander";
 import { RuntimeError } from "./errors.js";
 import { runHarness } from "./runtime.js";
 import type { RuntimeResult } from "./state.js";
+import { validateHarnessFile, type ValidationReport } from "./validator.js";
 import { WorkerRegistry } from "./worker_registry.js";
 
 export function formatRunResultText(result: RuntimeResult): string {
@@ -26,6 +27,42 @@ export function formatRunResultText(result: RuntimeResult): string {
 
 export function formatRunResultJson(result: RuntimeResult): string {
   return JSON.stringify(result);
+}
+
+export function formatValidationReportText(report: ValidationReport): string {
+  const lines = [`Harness: ${report.harnessPath}`, `Status: ${report.status}`];
+
+  if (report.status === "VALID") {
+    if (report.stageOrder) {
+      lines.push(`Stage Order: ${report.stageOrder.join(" -> ")}`);
+    }
+    if (report.startState) {
+      lines.push(`Start State: ${report.startState}`);
+    }
+    if (report.terminalStates) {
+      lines.push(`Terminal States: ${report.terminalStates.join(", ")}`);
+    }
+  }
+
+  if (report.errors.length > 0) {
+    lines.push("Errors:");
+    for (const error of report.errors) {
+      lines.push(`- ${error}`);
+    }
+  }
+
+  if (report.warnings.length > 0) {
+    lines.push("Warnings:");
+    for (const warning of report.warnings) {
+      lines.push(`- ${warning}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+export function formatValidationReportJson(report: ValidationReport): string {
+  return JSON.stringify(report);
 }
 
 export function createCliWorkerRegistry(workerName?: string): WorkerRegistry | undefined {
@@ -78,6 +115,16 @@ export function createProgram(): Command {
         process.exitCode = result.status === "PASS" ? 0 : 1;
       }
     );
+
+  program
+    .command("validate")
+    .requiredOption("--harness <path>", "Harness YAML path")
+    .option("--json", "Print validation report as JSON")
+    .action(async (options: { harness: string; json?: boolean }) => {
+      const report = await validateHarnessFile(options.harness);
+      console.log(options.json ? formatValidationReportJson(report) : formatValidationReportText(report));
+      process.exitCode = report.status === "VALID" ? 0 : 1;
+    });
 
   return program;
 }
