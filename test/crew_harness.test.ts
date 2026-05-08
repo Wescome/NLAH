@@ -31,6 +31,12 @@ describe("crew MVP harness", () => {
     expect(compiled.stageOrder).toEqual(stageOrder);
   });
 
+  it("passes compiler dataflow validation", async () => {
+    const spec = await loadHarness(path.resolve("harnesses/crew.mvp.yaml"));
+
+    expect(() => compileHarness(spec)).not.toThrow();
+  });
+
   it("declares exact stage input artifacts", async () => {
     const spec = await loadHarness(path.resolve("harnesses/crew.mvp.yaml"));
 

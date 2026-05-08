@@ -51,4 +51,36 @@ describe("compiler", () => {
     const compiled = compileHarness(await loadHarness(path.resolve("harnesses/crew.mvp.yaml")));
     expect(compiled.stageOrder).toEqual(["CONTRACT", "MAP", "PATCH", "VERIFY", "RELEASE"]);
   });
+
+  it("first stage with input fails dataflow validation", () => {
+    const spec = validSpec();
+    spec.stages.CONTRACT!.inputs = ["IssueContract"];
+
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
+    expect(() => compileHarness(spec)).toThrow("input artifact is not available");
+  });
+
+  it("stage consuming future artifact fails dataflow validation", () => {
+    const spec = validSpec();
+    spec.stages.MAP!.inputs = ["CandidatePatch"];
+
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
+    expect(() => compileHarness(spec)).toThrow("input artifact is not available");
+  });
+
+  it("stage consuming its own output fails dataflow validation", () => {
+    const spec = validSpec();
+    spec.stages.MAP!.inputs = ["RepoMap"];
+
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
+    expect(() => compileHarness(spec)).toThrow("input artifact is not available");
+  });
+
+  it("stage consuming artifact declared but never produced earlier fails dataflow validation", () => {
+    const spec = validSpec();
+    spec.stages.MAP!.inputs = ["FinalPatch"];
+
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
+    expect(() => compileHarness(spec)).toThrow("input artifact is not available");
+  });
 });

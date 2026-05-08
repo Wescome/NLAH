@@ -29,6 +29,32 @@ function assertRelativeSafe(value: string, label: string): void {
   }
 }
 
+function assertInputArtifactsAvailable(
+  spec: HarnessSpec,
+  stageOrder: string[]
+): void {
+  const availableArtifacts = new Set<string>();
+
+  for (const stageName of stageOrder) {
+    const stage = spec.stages[stageName];
+    if (!stage) {
+      throw new CompilerError(`invalid stage order references missing stage: ${stageName}`);
+    }
+
+    for (const artifactName of stage.inputs) {
+      if (!availableArtifacts.has(artifactName)) {
+        throw new CompilerError(
+          `input artifact is not available for stage ${stageName}: ${artifactName}`
+        );
+      }
+    }
+
+    for (const artifactName of stage.outputs) {
+      availableArtifacts.add(artifactName);
+    }
+  }
+}
+
 export async function loadHarness(filePath: string): Promise<HarnessSpec> {
   const content = await readFile(filePath, "utf8");
   const document = YAML.parseDocument(content, { uniqueKeys: true });
@@ -104,10 +130,13 @@ export function compileHarness(spec: HarnessSpec): CompiledHarness {
     .filter((state) => (graph.outgoing.get(state)?.length ?? 0) === 0)
     .sort();
 
+  const stageOrder = deterministicStageOrder(spec.stages, startState);
+  assertInputArtifactsAvailable(spec, stageOrder);
+
   return {
     spec,
     stagesByFromState,
-    stageOrder: deterministicStageOrder(spec.stages, startState),
+    stageOrder,
     startState,
     terminalStates
   };
