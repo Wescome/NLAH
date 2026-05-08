@@ -1,27 +1,67 @@
 # NLAH
 
-NLAH is a TypeScript-first Natural-Language Agent Harness runtime for
-artifact-gated multi-agent coding swarms.
+Natural-Language Agent Harness runtime for artifact-gated coding swarms.
 
-The MVP makes harness control explicit:
+## What this is
 
-```text
-NLAH DSL -> typed semantic model -> harness compiler -> executable WorkGraph
--> artifact-gated runtime -> trace ledger
-```
+NLAH is a TypeScript-first runtime for executing structured natural-language harnesses.
 
-Run the MVP harness:
+A harness defines:
+
+- roles
+- stages
+- artifacts
+- gates
+- failure modes
+- runtime state
+
+The runtime executes the harness as a typed artifact-gated WorkGraph.
+
+## MVP
+
+The MVP runs a deterministic coding-swarm harness:
 
 ```bash
 pnpm install
-pnpm tsx src/cli.ts run \
-  --harness harnesses/coding_swarm.mvp.yaml \
-  --repo ./examples/target_repo_stub \
-  --task ./examples/TASK.md
+pnpm run:mvp
 ```
 
-Verify the implementation:
+Expected output:
 
-```bash
-pnpm run verify
+```text
+Status: PASS
+State: PullRequestReady
 ```
+
+## Architecture
+
+```text
+YAML Harness
+-> Zod Schema
+-> Compiler
+-> Stage Graph
+-> Runtime
+-> Artifacts
+-> Gates
+-> Trace Ledger
+```
+
+## v0 Scope
+
+Included:
+
+- YAML harness loading
+- Zod validation
+- graph compilation
+- deterministic stage execution
+- artifact manager
+- gate evaluator
+- JSONL trace ledger
+- CLI
+
+Not included yet:
+
+- LLM calls
+- LangGraph
+- GitHub PR creation
+- real multi-agent execution

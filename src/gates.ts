@@ -1,7 +1,7 @@
-import { execa } from "execa";
-import type { ArtifactManager } from "./artifacts";
-import type { GateSpec } from "./schema";
-import type { RuntimeState } from "./state";
+import type { RuntimeState } from "./state.js";
+import type { ArtifactManager } from "./artifacts.js";
+import { ShellAdapter } from "./adapters.js";
+import { GateError } from "./errors.js";
 
 export type GateResult = {
   passed: boolean;
@@ -15,37 +15,40 @@ export type GateFn = (
   args: unknown
 ) => Promise<GateResult>;
 
+function pass(gate: string, message?: string): GateResult {
+  return message === undefined ? { passed: true, gate } : { passed: true, gate, message };
+}
+
 function fail(gate: string, message: string): GateResult {
   return { passed: false, gate, message };
 }
 
-function pass(gate: string, message = ""): GateResult {
-  return { passed: true, gate, message };
-}
-
-function parseGateEntry(entry: unknown): { name: string; args: unknown } {
-  if (typeof entry === "string") {
-    return { name: entry, args: undefined };
+export function parseGateExpression(expr: unknown): { gateName: string; args: unknown } {
+  if (typeof expr === "string") {
+    return { gateName: expr, args: undefined };
   }
-  if (entry && typeof entry === "object" && !Array.isArray(entry)) {
-    const keys = Object.keys(entry);
-    if (keys.length === 1) {
-      const name = keys[0];
-      return { name, args: (entry as Record<string, unknown>)[name] };
+  if (expr && typeof expr === "object" && !Array.isArray(expr)) {
+    const keys = Object.keys(expr);
+    if (keys.length !== 1) {
+      throw new GateError("object gate expression must have exactly one key");
     }
+    const gateName = keys[0];
+    if (!gateName) {
+      throw new GateError("gate name must not be empty");
+    }
+    return { gateName, args: (expr as Record<string, unknown>)[gateName] };
   }
-  return { name: "invalid_gate", args: entry };
+  throw new GateError("invalid gate expression");
 }
 
-async function readNamedArtifact(artifacts: ArtifactManager, preferred: string, args: unknown): Promise<string> {
-  const name = typeof args === "string" ? args : preferred;
-  return artifacts.readText(name);
+async function readArtifact(artifacts: ArtifactManager, defaultName: string, args: unknown): Promise<string> {
+  return artifacts.readText(typeof args === "string" ? args : defaultName);
 }
 
 export const gateRegistry: Record<string, GateFn> = {
   async exists(_state, artifacts, args) {
     if (typeof args !== "string") {
-      return fail("exists", "exists gate requires an artifact name");
+      throw new GateError("exists gate requires an artifact name");
     }
     const status = await artifacts.status(args);
     return status.exists && (status.sizeBytes ?? 0) > 0
@@ -55,94 +58,89 @@ export const gateRegistry: Record<string, GateFn> = {
 
   async patch_applies_cleanly(state, artifacts, args) {
     const artifactName = typeof args === "string" ? args : "CandidatePatch";
-    const patchPath = artifacts.resolve(artifactName);
-    const result = await execa("git", ["apply", "--check", patchPath], {
-      cwd: state.repoPath,
-      reject: false
-    });
-    return result.exitCode === 0
+    const adapter = new ShellAdapter([state.repoPath, state.runRoot]);
+    const result = await adapter.run(["git", "apply", "--check", artifacts.resolve(artifactName)], state.repoPath);
+    return result.ok
       ? pass("patch_applies_cleanly")
       : fail("patch_applies_cleanly", result.stderr || result.stdout || "git apply --check failed");
   },
 
   async repo_map_names_relevant_files(_state, artifacts, args) {
-    const content = await readNamedArtifact(artifacts, "RepoMap", args);
-    const hasHeading = /^#+\s*Relevant files\b/im.test(content) || /^\d+\.\s*Relevant files\b/im.test(content);
-    const afterHeading = content.split(/Relevant files/im)[1] ?? "";
-    const hasPathLikeLine = afterHeading
-      .split(/\r?\n/)
-      .some((line) => /^\s*[-*]?\s*`?[\w./-]+\.[\w-]+`?\s*$/.test(line.trim()));
-    return hasHeading && hasPathLikeLine
+    const content = await readArtifact(artifacts, "RepoMap", args);
+    const hasHeading = /(^|\n)#+\s*Relevant files\b/i.test(content);
+    const hasPathLikeToken = /\b[\w./-]+\.[A-Za-z0-9]+\b/.test(content);
+    return hasHeading && hasPathLikeToken
       ? pass("repo_map_names_relevant_files")
-      : fail("repo_map_names_relevant_files", "repo map must name relevant files");
+      : fail("repo_map_names_relevant_files", "RepoMap must include Relevant files and at least one path-like token");
   },
 
   async repo_map_names_test_entrypoints(_state, artifacts, args) {
-    const content = await readNamedArtifact(artifacts, "RepoMap", args);
+    const content = await readArtifact(artifacts, "RepoMap", args);
     return /Relevant tests|Test entrypoints/i.test(content)
       ? pass("repo_map_names_test_entrypoints")
-      : fail("repo_map_names_test_entrypoints", "repo map must name test entrypoints");
+      : fail("repo_map_names_test_entrypoints", "RepoMap must include Relevant tests or Test entrypoints");
   },
 
   async verifier_accepts_patch(_state, artifacts, args) {
-    const content = await readNamedArtifact(artifacts, "VerifierReport", args);
-    return /Verdict:\s*PASS\b/.test(content)
+    const content = await readArtifact(artifacts, "VerifierReport", args);
+    return content.includes("Verdict: PASS")
       ? pass("verifier_accepts_patch")
-      : fail("verifier_accepts_patch", "verifier report did not pass");
+      : fail("verifier_accepts_patch", "VerifierReport must contain Verdict: PASS");
   },
 
   async test_results_support_claims(_state, artifacts, args) {
-    const content = await readNamedArtifact(artifacts, "VerifierReport", args);
-    return /Tests run/i.test(content)
+    const content = await readArtifact(artifacts, "VerifierReport", args);
+    return content.includes("Tests run")
       ? pass("test_results_support_claims")
-      : fail("test_results_support_claims", "verifier report must include tests run");
+      : fail("test_results_support_claims", "VerifierReport must contain Tests run");
   },
 
   async final_patch_matches_verified_candidate(_state, artifacts) {
     const finalPatch = await artifacts.readText("FinalPatch");
     const candidatePatch = await artifacts.readText("CandidatePatch");
-    return finalPatch === candidatePatch
+    return finalPatch.trim() === candidatePatch.trim()
       ? pass("final_patch_matches_verified_candidate")
-      : fail("final_patch_matches_verified_candidate", "final.patch differs from candidate.patch");
+      : fail("final_patch_matches_verified_candidate", "FinalPatch does not match CandidatePatch");
   }
 };
 
-export async function evaluateGateEntry(
-  entry: unknown,
+export async function evaluateGateExpression(
+  expr: unknown,
   state: RuntimeState,
   artifacts: ArtifactManager
 ): Promise<GateResult> {
-  const { name, args } = parseGateEntry(entry);
-  const gate = gateRegistry[name];
+  const { gateName, args } = parseGateExpression(expr);
+  const gate = gateRegistry[gateName];
   if (!gate) {
-    return fail(name, `unknown gate: ${name}`);
+    throw new GateError(`unknown gate: ${gateName}`);
   }
   return gate(state, artifacts, args);
 }
 
 export async function evaluateGateSpec(
-  gateSpec: GateSpec | undefined,
+  gate: { all?: unknown[]; any?: unknown[] } | undefined,
   state: RuntimeState,
   artifacts: ArtifactManager
 ): Promise<GateResult[]> {
-  if (!gateSpec) {
+  if (!gate) {
     return [];
   }
 
   const results: GateResult[] = [];
-  for (const entry of gateSpec.all) {
-    results.push(await evaluateGateEntry(entry, state, artifacts));
+  for (const expr of gate.all ?? []) {
+    results.push(await evaluateGateExpression(expr, state, artifacts));
   }
 
-  if (gateSpec.any.length > 0) {
-    const anyResults = [];
-    for (const entry of gateSpec.any) {
-      anyResults.push(await evaluateGateEntry(entry, state, artifacts));
+  const anyExpressions = gate.any ?? [];
+  if (anyExpressions.length > 0) {
+    const anyResults: GateResult[] = [];
+    for (const expr of anyExpressions) {
+      anyResults.push(await evaluateGateExpression(expr, state, artifacts));
     }
+    results.push(...anyResults);
     if (!anyResults.some((result) => result.passed)) {
       results.push(fail("any", "no any-gate passed"));
     }
-    results.push(...anyResults);
   }
 
   return results;

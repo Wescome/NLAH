@@ -1,36 +1,36 @@
 import { z } from "zod";
 
 export const HarnessMetadataSchema = z.object({
-  name: z.string(),
-  task_family: z.string(),
-  objective: z.string()
+  name: z.string().min(1),
+  task_family: z.string().min(1),
+  objective: z.string().min(1)
 });
 
 export const RuntimeConfigSchema = z.object({
-  max_patch_workers: z.number().default(1),
-  max_repair_rounds: z.number().default(0),
-  state_root: z.string(),
-  artifact_root: z.string()
+  max_patch_workers: z.number().int().nonnegative().default(1),
+  max_repair_rounds: z.number().int().nonnegative().default(0),
+  state_root: z.string().min(1),
+  artifact_root: z.string().min(1)
 });
 
 export const RoleSpecSchema = z.object({
-  responsibility: z.string()
+  responsibility: z.string().min(1)
 });
 
 export const ArtifactSpecSchema = z.object({
-  path: z.string(),
+  path: z.string().min(1),
   required: z.boolean().default(true)
 });
 
 export const GateSpecSchema = z.object({
-  all: z.array(z.any()).default([]),
-  any: z.array(z.any()).default([])
+  all: z.array(z.unknown()).default([]),
+  any: z.array(z.unknown()).default([])
 });
 
 export const StageSpecSchema = z.object({
-  from: z.string(),
-  to: z.string(),
-  role: z.string(),
+  from: z.string().min(1),
+  to: z.string().min(1),
+  role: z.string().min(1),
   inputs: z.array(z.string()).default([]),
   outputs: z.array(z.string()).default([]),
   gate: GateSpecSchema.optional()

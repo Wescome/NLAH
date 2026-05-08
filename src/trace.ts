@@ -20,7 +20,10 @@ export class TraceLogger {
     private readonly runId: string
   ) {}
 
-  async emit(event: string, payload: Partial<TraceEvent> = {}): Promise<void> {
+  async emit(
+    event: string,
+    payload: Partial<Omit<TraceEvent, "timestamp" | "runId" | "event">> = {}
+  ): Promise<void> {
     const entry: TraceEvent = {
       timestamp: new Date().toISOString(),
       runId: this.runId,
@@ -29,5 +32,9 @@ export class TraceLogger {
     };
     await mkdir(path.dirname(this.ledgerPath), { recursive: true });
     await appendFile(this.ledgerPath, `${JSON.stringify(entry)}\n`, "utf8");
+  }
+
+  get path(): string {
+    return this.ledgerPath;
   }
 }

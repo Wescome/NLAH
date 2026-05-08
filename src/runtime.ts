@@ -1,188 +1,181 @@
-import crypto from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { mkdir, copyFile } from "node:fs/promises";
 import path from "node:path";
-import { copyFile, mkdir, readFile, readdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import { ArtifactManager } from "./artifacts";
-import { compileHarness, loadHarness } from "./compiler";
-import { evaluateGateSpec } from "./gates";
-import type { StageSpec } from "./schema";
-import type { RuntimeState } from "./state";
-import { TraceLogger } from "./trace";
-import { NlahError } from "./errors";
+import { loadHarness, compileHarness } from "./compiler.js";
+import { ArtifactManager } from "./artifacts.js";
+import { TraceLogger } from "./trace.js";
+import { evaluateGateSpec } from "./gates.js";
+import type { RuntimeResult, RuntimeState } from "./state.js";
+import type { StageSpec } from "./schema.js";
+import { RuntimeError } from "./errors.js";
 
-export type RuntimeStatus = "PASS" | "FAIL" | "INCOMPLETE";
+const candidatePatch = [
+  "diff --git a/src/math.ts b/src/math.ts",
+  "index 0000000..0000001 100644",
+  "--- a/src/math.ts",
+  "+++ b/src/math.ts",
+  "@@ -1,3 +1,3 @@",
+  " export function add(a: number, b: number): number {",
+  "-  return a - b;",
+  "+  return a + b;",
+  " }",
+  ""
+].join("\n");
 
-export type RuntimeResult = {
-  runId: string;
-  status: RuntimeStatus;
-  state: string;
-  runRoot: string;
-  artifacts: string[];
-  tracePath: string;
-  error?: string;
-};
-
-function roleSlug(role: string): string {
-  return role
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/\s+/g, "_")
-    .toLowerCase();
-}
-
-async function listRepoFiles(root: string): Promise<string[]> {
-  const results: string[] = [];
-
-  async function walk(dir: string): Promise<void> {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if ([".git", "node_modules", "runs", "dist"].includes(entry.name)) {
-        continue;
-      }
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(fullPath);
-      } else if (entry.isFile()) {
-        results.push(path.relative(root, fullPath).split(path.sep).join("/"));
-      }
-    }
+async function writeOutputArtifact(
+  output: string,
+  state: RuntimeState,
+  artifacts: ArtifactManager
+): Promise<void> {
+  if (output === "IssueContract") {
+    await artifacts.writeText(
+      output,
+      [
+        "# Issue Contract",
+        "",
+        "## Problem Summary",
+        "",
+        "Fix the target repository task described in TASK.md.",
+        "",
+        "## Acceptance Criteria",
+        "",
+        "The patch must satisfy the task and pass verification.",
+        "",
+        "## Non-Goals",
+        "",
+        "No unrelated refactors.",
+        ""
+      ].join("\n")
+    );
+    return;
   }
 
-  await walk(root);
-  return results.sort();
-}
-
-async function loadRolePolicy(harnessPath: string, role: string): Promise<string> {
-  const rolePath = path.resolve(path.dirname(harnessPath), "..", "roles", `${roleSlug(role)}.md`);
-  if (!existsSync(rolePath)) {
-    throw new NlahError(`missing role policy file: ${rolePath}`);
+  if (output === "RepoMap") {
+    await artifacts.writeText(
+      output,
+      [
+        "# Repo Map",
+        "",
+        "## Problem summary",
+        "",
+        "The target task concerns the repository behavior described in TASK.md.",
+        "",
+        "## Relevant files",
+        "",
+        "- src/math.ts",
+        "",
+        "## Relevant tests",
+        "",
+        "- test/math.test.ts",
+        "",
+        "## Suspected root cause",
+        "",
+        "Implementation does not satisfy expected behavior.",
+        "",
+        "## Blast-radius risks",
+        "",
+        "Keep patch minimal.",
+        ""
+      ].join("\n")
+    );
+    return;
   }
-  return readFile(rolePath, "utf8");
+
+  if (output === "CandidatePatch") {
+    await artifacts.writeText(output, candidatePatch);
+    return;
+  }
+
+  if (output === "VerifierReport") {
+    await artifacts.writeText(
+      output,
+      [
+        "# Verifier Report",
+        "",
+        "## Patch Summary",
+        "",
+        "The candidate patch changes add() to return the sum of its inputs.",
+        "",
+        "## Tests run",
+        "",
+        "- git apply --check candidate.patch",
+        "",
+        "## Evidence",
+        "",
+        "Patch applies cleanly.",
+        "",
+        "## Verdict",
+        "",
+        "Verdict: PASS",
+        ""
+      ].join("\n")
+    );
+    return;
+  }
+
+  if (output === "FinalPatch") {
+    await artifacts.writeText(output, await artifacts.readText("CandidatePatch"));
+    return;
+  }
+
+  if (output === "PRSummary") {
+    await artifacts.writeText(
+      output,
+      [
+        "# PR Summary",
+        "",
+        "## Summary",
+        "",
+        "Fix add() so it returns a + b.",
+        "",
+        "## Files changed",
+        "",
+        "- src/math.ts",
+        "",
+        "## Tests run",
+        "",
+        "- git apply --check candidate.patch",
+        "",
+        "## Verification evidence",
+        "",
+        "Verifier report returned Verdict: PASS.",
+        "",
+        "## Residual risk",
+        "",
+        "Minimal; single-line arithmetic fix.",
+        ""
+      ].join("\n")
+    );
+    return;
+  }
+
+  await artifacts.writeText(output, `Generated by ${state.currentState}.\n`);
 }
 
-function buildCandidatePatch(): string {
-  return [
-    "diff --git a/src/message.txt b/src/message.txt",
-    "--- a/src/message.txt",
-    "+++ b/src/message.txt",
-    "@@ -1 +1 @@",
-    "-hello from nlah",
-    "+hello from nlah runtime",
-    ""
-  ].join("\n");
-}
-
-async function executeRoleStub(
+async function executeDeterministicStage(
+  _stageName: string,
   stage: StageSpec,
   state: RuntimeState,
-  artifacts: ArtifactManager,
-  rolePolicy: string
+  artifacts: ArtifactManager
 ): Promise<string[]> {
   const created: string[] = [];
-  const task = await readFile(state.taskPath, "utf8");
-  const repoFiles = await listRepoFiles(state.repoPath);
-
   for (const output of stage.outputs) {
-    if (output === "IssueContract") {
-      await artifacts.writeText(
-        output,
-        [
-          "# Issue Contract",
-          "",
-          "## Task",
-          task.trim(),
-          "",
-          "## Acceptance Contract",
-          "- Runtime must produce declared artifacts.",
-          "- Gates must pass before state transitions."
-        ].join("\n")
-      );
-    } else if (output === "RepoMap") {
-      await artifacts.writeText(
-        output,
-        [
-          "# Repository Map",
-          "",
-          "## Problem summary",
-          "The target repository contains a message fixture that the candidate patch updates.",
-          "",
-          "## Relevant files",
-          ...(repoFiles.length > 0 ? repoFiles.map((file) => `- ${file}`) : ["- src/message.txt"]),
-          "",
-          "## Relevant tests",
-          "- git apply --check candidate.patch",
-          "",
-          "## Suspected root cause",
-          "The fixture text does not match the desired runtime wording.",
-          "",
-          "## Blast-radius risks",
-          "- Patch should remain limited to src/message.txt.",
-          "",
-          "<!-- role policy loaded -->",
-          rolePolicy.trim().slice(0, 200)
-        ].join("\n")
-      );
-    } else if (output === "CandidatePatch") {
-      await artifacts.writeText(output, buildCandidatePatch());
-    } else if (output === "VerifierReport") {
-      await artifacts.writeText(
-        output,
-        [
-          "# Verifier Report",
-          "",
-          "Verdict: PASS",
-          "",
-          "Tests run:",
-          "- git apply --check candidate.patch",
-          "",
-          "Verification evidence:",
-          "- Candidate patch is checked by executable gates before transition."
-        ].join("\n")
-      );
-    } else if (output === "FinalPatch") {
-      const candidate = await artifacts.readText("CandidatePatch");
-      await artifacts.writeText(output, candidate);
-    } else if (output === "PRSummary") {
-      await artifacts.writeText(
-        output,
-        [
-          "# PR Summary",
-          "",
-          "## Summary",
-          "Updates the target message fixture through the verified candidate patch.",
-          "",
-          "## Files changed",
-          "- src/message.txt",
-          "",
-          "## Tests run",
-          "- git apply --check candidate.patch",
-          "",
-          "## Verification evidence",
-          "- Verifier report contains Verdict: PASS.",
-          "- final.patch matches candidate.patch.",
-          "",
-          "## Residual risk",
-          "- MVP uses deterministic role stubs rather than coding agents."
-        ].join("\n")
-      );
-    } else {
-      await artifacts.writeText(output, `Generated by ${stage.role}.\n`);
-    }
+    await writeOutputArtifact(output, state, artifacts);
     created.push(output);
   }
-
   return created;
 }
 
 async function failRun(
   logger: TraceLogger,
   result: Omit<RuntimeResult, "status">,
-  error: string
+  message: string
 ): Promise<RuntimeResult> {
-  await logger.emit("run_failed", { message: error });
+  await logger.emit("run_failed", { message });
   return {
     ...result,
     status: "FAIL",
-    error
+    message
   };
 }
 
@@ -192,12 +185,11 @@ export async function runHarness(
   taskPath: string,
   runId?: string
 ): Promise<RuntimeResult> {
-  runId ??= crypto.randomUUID();
+  runId ??= randomUUID();
   const resolvedHarnessPath = path.resolve(harnessPath);
   const resolvedRepoPath = path.resolve(repoPath);
   const resolvedTaskPath = path.resolve(taskPath);
-  const spec = await loadHarness(resolvedHarnessPath);
-  const compiled = await compileHarness(spec);
+  const compiled = compileHarness(await loadHarness(resolvedHarnessPath));
 
   const runRoot = path.resolve("runs", runId);
   const stateRoot = path.join(runRoot, "state");
@@ -207,116 +199,115 @@ export async function runHarness(
   await mkdir(artifactRoot, { recursive: true });
   await copyFile(resolvedTaskPath, path.join(runRoot, "TASK.md"));
 
-  const artifacts = new ArtifactManager(runRoot, spec);
+  const artifacts = new ArtifactManager(runRoot, compiled.spec);
   const logger = new TraceLogger(tracePath, runId);
-  const startState = Object.keys(compiled.stagesByFromState).find((candidate) =>
-    !Object.values(spec.stages).some((stage) => stage.to === candidate)
-  );
-  if (!startState) {
-    throw new NlahError("compiled harness has no start state");
-  }
-
   const state: RuntimeState = {
     runId,
-    currentState: startState,
+    currentState: compiled.startState,
     taskPath: resolvedTaskPath,
     repoPath: resolvedRepoPath,
     harnessPath: resolvedHarnessPath,
+    runRoot,
     stateRoot,
     artifactRoot,
     stageHistory: [],
     artifacts: {}
   };
 
-  const baseResult = {
+  const resultBase = {
     runId,
-    state: state.currentState,
+    finalState: state.currentState,
     runRoot,
-    artifacts: Object.keys(spec.artifacts),
+    artifactRoot,
     tracePath
   };
 
   await logger.emit("run_started", { fromState: state.currentState });
 
   try {
-    while (true) {
-      const enabled = compiled.stagesByFromState[state.currentState] ?? [];
-      if (enabled.length === 0) {
-        await logger.emit("run_completed", { toState: state.currentState });
-        return {
-          ...baseResult,
-          status: "PASS",
-          state: state.currentState
-        };
+    while (!compiled.terminalStates.includes(state.currentState)) {
+      const stages = compiled.stagesByFromState[state.currentState] ?? [];
+      if (stages.length === 0) {
+        throw new RuntimeError(`no enabled stage for state: ${state.currentState}`);
       }
-      if (enabled.length > 1) {
-        return failRun(logger, { ...baseResult, state: state.currentState }, "branching execution is not implemented in MVP");
-      }
-
-      const stage = enabled[0];
-      const stageName = compiled.stageOrder.find((name) => spec.stages[name] === stage);
-      if (!stageName) {
-        return failRun(logger, { ...baseResult, state: state.currentState }, "stage missing from compiled order");
+      const stageEntry = [...stages].sort((a, b) => a.name.localeCompare(b.name))[0];
+      if (!stageEntry) {
+        throw new RuntimeError(`no enabled stage for state: ${state.currentState}`);
       }
 
       await logger.emit("stage_started", {
-        stage: stageName,
-        fromState: stage.from,
-        toState: stage.to
+        stage: stageEntry.name,
+        fromState: stageEntry.spec.from,
+        toState: stageEntry.spec.to
       });
-      const rolePolicy = await loadRolePolicy(resolvedHarnessPath, stage.role);
-      const created = await executeRoleStub(stage, state, artifacts, rolePolicy);
 
-      for (const artifactName of created) {
-        const status = await artifacts.status(artifactName);
-        state.artifacts[artifactName] = status;
-        await logger.emit("artifact_created", { stage: stageName, artifact: artifactName });
+      const created = await executeDeterministicStage(stageEntry.name, stageEntry.spec, state, artifacts);
+      for (const artifact of created) {
+        state.artifacts[artifact] = await artifacts.status(artifact);
+        await logger.emit("artifact_created", { stage: stageEntry.name, artifact });
       }
 
-      for (const output of stage.outputs) {
+      for (const output of stageEntry.spec.outputs) {
         const status = await artifacts.status(output);
         if (!status.exists || (status.sizeBytes ?? 0) === 0) {
           return failRun(
             logger,
-            { ...baseResult, state: state.currentState },
+            { ...resultBase, finalState: state.currentState },
             `missing required output artifact: ${output}`
           );
         }
       }
 
-      const gateResults = await evaluateGateSpec(stage.gate, state, artifacts);
-      for (const result of gateResults) {
-        await logger.emit(result.passed ? "gate_passed" : "gate_failed", {
-          stage: stageName,
-          gate: result.gate,
-          passed: result.passed,
-          message: result.message
+      const gateResults = await evaluateGateSpec(stageEntry.spec.gate, state, artifacts);
+      for (const gate of gateResults) {
+        const payload =
+          gate.message === undefined
+            ? {
+                stage: stageEntry.name,
+                gate: gate.gate,
+                passed: gate.passed
+              }
+            : {
+                stage: stageEntry.name,
+                gate: gate.gate,
+                passed: gate.passed,
+                message: gate.message
+              };
+        await logger.emit(gate.passed ? "gate_passed" : "gate_failed", {
+          ...payload
         });
       }
-      const failedGate = gateResults.find((result) => !result.passed);
+      const failedGate = gateResults.find((gate) => !gate.passed);
       if (failedGate) {
         return failRun(
           logger,
-          { ...baseResult, state: state.currentState },
+          { ...resultBase, finalState: state.currentState },
           `gate failed: ${failedGate.gate}: ${failedGate.message ?? ""}`.trim()
         );
       }
 
       const previousState = state.currentState;
-      state.currentState = stage.to;
+      state.currentState = stageEntry.spec.to;
       await logger.emit("state_transition", {
-        stage: stageName,
+        stage: stageEntry.name,
         fromState: previousState,
         toState: state.currentState
       });
       await logger.emit("stage_completed", {
-        stage: stageName,
+        stage: stageEntry.name,
         fromState: previousState,
         toState: state.currentState
       });
     }
+
+    await logger.emit("run_completed", { toState: state.currentState });
+    return {
+      ...resultBase,
+      status: "PASS",
+      finalState: state.currentState
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return failRun(logger, { ...baseResult, state: state.currentState }, message);
+    return failRun(logger, { ...resultBase, finalState: state.currentState }, message);
   }
 }

@@ -1,16 +1,19 @@
 {
   "name": "nlah",
   "version": "0.1.0",
-  "description": "TypeScript-first Natural-Language Agent Harness runtime for artifact-gated coding swarms.",
+  "description": "Natural-Language Agent Harness runtime for artifact-gated coding swarms.",
   "type": "module",
   "bin": {
-    "nlah": "dist/cli.js"
+    "nlah": "./dist/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "build": "tsc",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "verify": "pnpm run typecheck && pnpm run test"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "run:mvp": "tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md",
+    "verify": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
     "commander": "^12.1.0",

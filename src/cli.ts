@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { runHarness } from "./runtime";
+import { runHarness } from "./runtime.js";
 
 const program = new Command();
 
@@ -19,16 +19,13 @@ program
     const result = await runHarness(options.harness, options.repo, options.task, options.runId);
     console.log(`Run ID: ${result.runId}`);
     console.log(`Status: ${result.status}`);
-    console.log(`State: ${result.state}`);
-    console.log("Artifacts:");
-    for (const artifact of result.artifacts) {
-      console.log(`  - ${artifact}`);
-    }
+    console.log(`State: ${result.finalState}`);
+    console.log(`Artifacts: ${result.artifactRoot}`);
     console.log(`Trace: ${result.tracePath}`);
-    if (result.error) {
-      console.error(`Error: ${result.error}`);
-      process.exitCode = 1;
+    if (result.message) {
+      console.log(`Message: ${result.message}`);
     }
+    process.exitCode = result.status === "PASS" ? 0 : 1;
   });
 
 await program.parseAsync(process.argv);

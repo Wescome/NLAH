@@ -1,7 +1,8 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { HarnessSpec } from "../src/schema";
+import { execa } from "execa";
+import type { HarnessSpec } from "../src/schema.js";
 
 export async function tempDir(prefix: string): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), prefix));
@@ -77,8 +78,25 @@ export function validSpec(): HarnessSpec {
 }
 
 export async function createTargetRepo(root: string): Promise<string> {
-  const repo = path.join(root, "repo");
-  await mkdir(path.join(repo, "src"), { recursive: true });
-  await writeFile(path.join(repo, "src", "message.txt"), "hello from nlah\n", "utf8");
+  const repo = path.join(root, "target_repo_stub");
+  await cp(path.resolve("examples/target_repo_stub"), repo, { recursive: true });
+  await execa("git", ["init"], { cwd: repo });
+  await execa("git", ["add", "."], { cwd: repo });
+  await execa("git", ["commit", "-m", "initial target repo"], {
+    cwd: repo,
+    env: {
+      GIT_AUTHOR_NAME: "NLAH Test",
+      GIT_AUTHOR_EMAIL: "nlah@example.com",
+      GIT_COMMITTER_NAME: "NLAH Test",
+      GIT_COMMITTER_EMAIL: "nlah@example.com"
+    }
+  });
   return repo;
+}
+
+export async function writeHarness(root: string, content: string): Promise<string> {
+  await mkdir(root, { recursive: true });
+  const harnessPath = path.join(root, "harness.yaml");
+  await writeFile(harnessPath, content, "utf8");
+  return harnessPath;
 }

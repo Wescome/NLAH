@@ -1,50 +1,58 @@
-import path from "node:path";
 import { readFile } from "node:fs/promises";
 import YAML from "yaml";
-import type { HarnessSpec, StageSpec } from "./schema";
-import { HarnessSpecSchema } from "./schema";
-import { NlahError } from "./errors";
+import path from "node:path";
+import { HarnessSpecSchema, type HarnessSpec, type StageSpec } from "./schema.js";
+import { SchemaValidationError, CompilerError } from "./errors.js";
 import {
-  assertAcyclic,
+  buildStageGraph,
   findStartStates,
-  traverseForward,
-  type GraphEdge
-} from "./graph";
+  assertNoCycles,
+  assertReachableFrom,
+  deterministicStageOrder
+} from "./graph.js";
 
 export type CompiledHarness = {
   spec: HarnessSpec;
-  stagesByFromState: Record<string, StageSpec[]>;
+  stagesByFromState: Record<string, Array<{ name: string; spec: StageSpec }>>;
   stageOrder: string[];
+  startState: string;
+  terminalStates: string[];
 };
 
 function assertRelativeSafe(value: string, label: string): void {
   if (path.isAbsolute(value)) {
-    throw new NlahError(`${label} must be relative: ${value}`);
+    throw new CompilerError(`${label} must be relative: ${value}`);
   }
   const normalized = path.normalize(value);
   if (normalized === ".." || normalized.startsWith(`..${path.sep}`)) {
-    throw new NlahError(`${label} must not escape root: ${value}`);
+    throw new CompilerError(`${label} must not escape root: ${value}`);
   }
 }
 
-export async function loadHarness(harnessPath: string): Promise<HarnessSpec> {
-  const content = await readFile(harnessPath, "utf8");
+export async function loadHarness(filePath: string): Promise<HarnessSpec> {
+  const content = await readFile(filePath, "utf8");
   const document = YAML.parseDocument(content, { uniqueKeys: true });
   if (document.errors.length > 0) {
-    throw new NlahError(document.errors.map((error) => error.message).join("; "));
+    throw new SchemaValidationError(document.errors.map((error) => error.message).join("; "));
   }
-  const raw = document.toJSON();
-  const parsed = HarnessSpecSchema.safeParse(raw);
+
+  const parsed = HarnessSpecSchema.safeParse(document.toJSON());
   if (!parsed.success) {
-    throw new NlahError(parsed.error.issues.map((issue) => issue.message).join("; "));
+    throw new SchemaValidationError(parsed.error.issues.map((issue) => issue.message).join("; "));
   }
   return parsed.data;
 }
 
-export async function compileHarness(spec: HarnessSpec): Promise<CompiledHarness> {
-  const stageNames = Object.keys(spec.stages);
-  if (stageNames.length === 0) {
-    throw new NlahError("missing start state: harness has no stages");
+export function compileHarness(spec: HarnessSpec): CompiledHarness {
+  const stageEntries = Object.entries(spec.stages);
+  if (stageEntries.length === 0) {
+    throw new CompilerError("no stages exist");
+  }
+  if (Object.keys(spec.roles).length === 0) {
+    throw new CompilerError("no roles exist");
+  }
+  if (Object.keys(spec.artifacts).length === 0) {
+    throw new CompilerError("no artifacts exist");
   }
 
   assertRelativeSafe(spec.runtime.state_root, "runtime.state_root");
@@ -54,52 +62,53 @@ export async function compileHarness(spec: HarnessSpec): Promise<CompiledHarness
     assertRelativeSafe(artifact.path, `artifact ${artifactName}`);
   }
 
-  const edges: GraphEdge[] = [];
-  const stagesByFromState: Record<string, StageSpec[]> = {};
-
-  for (const stageName of stageNames) {
-    const stage = spec.stages[stageName];
+  const stagesByFromState: Record<string, Array<{ name: string; spec: StageSpec }>> = {};
+  for (const [stageName, stage] of stageEntries) {
     if (!spec.roles[stage.role]) {
-      throw new NlahError(`missing role for stage ${stageName}: ${stage.role}`);
+      throw new CompilerError(`missing role for stage ${stageName}: ${stage.role}`);
     }
-    for (const artifactName of [...stage.inputs, ...stage.outputs]) {
+    for (const artifactName of stage.inputs) {
       if (!spec.artifacts[artifactName]) {
-        throw new NlahError(`missing artifact reference in stage ${stageName}: ${artifactName}`);
+        throw new CompilerError(`missing artifact input in stage ${stageName}: ${artifactName}`);
       }
     }
-    edges.push({ stage: stageName, from: stage.from, to: stage.to });
-    stagesByFromState[stage.from] ??= [];
-    stagesByFromState[stage.from].push(stage);
-  }
+    for (const artifactName of stage.outputs) {
+      if (!spec.artifacts[artifactName]) {
+        throw new CompilerError(`missing artifact output in stage ${stageName}: ${artifactName}`);
+      }
+    }
 
-  const starts = findStartStates(edges);
-  if (starts.length === 0) {
-    throw new NlahError("missing start state");
-  }
-  if (starts.length > 1) {
-    throw new NlahError(`invalid transitions: multiple start states (${starts.join(", ")})`);
-  }
-
-  assertAcyclic(edges);
-
-  const orderedEdges = traverseForward(edges, starts[0]);
-  const visitedStages = new Set(orderedEdges.map((edge) => edge.stage));
-  const unreachable = stageNames.filter((stageName) => !visitedStages.has(stageName));
-  if (unreachable.length > 0) {
-    throw new NlahError(`unreachable stages: ${unreachable.join(", ")}`);
+    const fromStateStages = stagesByFromState[stage.from] ?? [];
+    fromStateStages.push({ name: stageName, spec: stage });
+    stagesByFromState[stage.from] = fromStateStages;
   }
 
   for (const stages of Object.values(stagesByFromState)) {
-    stages.sort((a, b) => {
-      const aName = stageNames.find((name) => spec.stages[name] === a) ?? "";
-      const bName = stageNames.find((name) => spec.stages[name] === b) ?? "";
-      return aName.localeCompare(bName);
-    });
+    stages.sort((a, b) => a.name.localeCompare(b.name));
   }
+
+  const graph = buildStageGraph(spec.stages);
+  const startStates = findStartStates(graph);
+  if (startStates.length !== 1) {
+    throw new CompilerError(`expected exactly one start state, found ${startStates.length}`);
+  }
+  const startState = startStates[0];
+  if (!startState) {
+    throw new CompilerError("missing start state");
+  }
+  assertNoCycles(graph);
+  assertReachableFrom(graph, startState);
+
+  const terminalStates = [...graph.states]
+    .filter((state) => (graph.incoming.get(state)?.length ?? 0) > 0)
+    .filter((state) => (graph.outgoing.get(state)?.length ?? 0) === 0)
+    .sort();
 
   return {
     spec,
     stagesByFromState,
-    stageOrder: orderedEdges.map((edge) => edge.stage)
+    stageOrder: deterministicStageOrder(spec.stages, startState),
+    startState,
+    terminalStates
   };
 }

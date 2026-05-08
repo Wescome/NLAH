@@ -1,12 +1,15 @@
-Role: PatchWorker
+# Role: PatchWorker
 
-Responsibility:
+## Responsibility
+
 Produce a candidate patch that addresses the issue contract.
 
-Must produce:
+## Must produce
+
 - candidate.patch
 
-Must:
+## Must
+
 - base changes on repo_map.md
 - keep patch minimal
 - preserve existing style

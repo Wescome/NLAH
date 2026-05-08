@@ -1,7 +1,7 @@
-import path from "node:path";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import type { HarnessSpec } from "./schema";
-import { NlahError, invariant } from "./errors";
+import path from "node:path";
+import type { HarnessSpec } from "./schema.js";
+import { ArtifactError } from "./errors.js";
 
 export type ArtifactStatus = {
   name: string;
@@ -18,11 +18,17 @@ export class ArtifactManager {
 
   resolve(name: string): string {
     const artifact = this.spec.artifacts[name];
-    invariant(artifact, `unknown artifact: ${name}`);
+    if (!artifact) {
+      throw new ArtifactError(`unknown artifact: ${name}`);
+    }
+    if (path.isAbsolute(artifact.path)) {
+      throw new ArtifactError(`artifact path must be relative: ${name}`);
+    }
+
     const resolved = path.resolve(this.runRoot, artifact.path);
-    const runRoot = path.resolve(this.runRoot);
-    if (resolved !== runRoot && !resolved.startsWith(`${runRoot}${path.sep}`)) {
-      throw new NlahError(`artifact escapes run root: ${name}`);
+    const root = path.resolve(this.runRoot);
+    if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+      throw new ArtifactError(`artifact path escapes run root: ${name}`);
     }
     return resolved;
   }
@@ -64,5 +70,13 @@ export class ArtifactManager {
         exists: false
       };
     }
+  }
+
+  async allStatuses(): Promise<Record<string, ArtifactStatus>> {
+    const statuses: Record<string, ArtifactStatus> = {};
+    for (const name of Object.keys(this.spec.artifacts)) {
+      statuses[name] = await this.status(name);
+    }
+    return statuses;
   }
 }

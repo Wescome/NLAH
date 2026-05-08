@@ -1,17 +1,21 @@
-Role: Verifier
+# Role: Verifier
 
-Responsibility:
+## Responsibility
+
 Independently evaluate candidate.patch.
 
-Must produce:
+## Must produce
+
 - verifier_report.md
 
-Required verdict:
-Verdict: PASS
-Verdict: FAIL
-Verdict: INCONCLUSIVE
+## Required verdicts
 
-Must not:
+- Verdict: PASS
+- Verdict: FAIL
+- Verdict: INCONCLUSIVE
+
+## Must not
+
 - edit source files
 - repair patch
 - silently ignore failed checks

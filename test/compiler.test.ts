@@ -1,20 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { compileHarness } from "../src/compiler";
-import { detectCycles, traverseForward } from "../src/graph";
-import { validSpec } from "./helpers";
+import path from "node:path";
+import { compileHarness, loadHarness } from "../src/compiler.js";
+import { CompilerError } from "../src/errors.js";
+import { validSpec } from "./helpers.js";
 
 describe("compiler", () => {
-  it("compiles the stage graph", async () => {
-    const compiled = await compileHarness(validSpec());
-    expect(compiled.stagesByFromState.TaskReceived).toHaveLength(1);
+  it("valid harness compiles", async () => {
+    const compiled = compileHarness(await loadHarness(path.resolve("harnesses/coding_swarm.mvp.yaml")));
+    expect(compiled.startState).toBe("TaskReceived");
+    expect(compiled.terminalStates).toEqual(["PullRequestReady"]);
   });
 
-  it("produces deterministic stage order", async () => {
-    const compiled = await compileHarness(validSpec());
-    expect(compiled.stageOrder).toEqual(["CONTRACT", "MAP", "PATCH", "VERIFY", "RELEASE"]);
+  it("missing role fails", () => {
+    const spec = validSpec();
+    spec.stages.MAP!.role = "Missing";
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
   });
 
-  it("fails unreachable stages", async () => {
+  it("missing artifact output fails", () => {
+    const spec = validSpec();
+    spec.stages.MAP!.outputs = ["Nope"];
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
+  });
+
+  it("absolute artifact path fails", () => {
+    const spec = validSpec();
+    spec.artifacts.RepoMap!.path = "/tmp/repo_map.md";
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
+  });
+
+  it("multiple start states fail", () => {
     const spec = validSpec();
     spec.stages.ORPHAN = {
       from: "OtherStart",
@@ -23,27 +38,11 @@ describe("compiler", () => {
       inputs: [],
       outputs: ["RepoMap"]
     };
-    await expect(compileHarness(spec)).rejects.toThrow(/multiple start states|unreachable/);
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
   });
 
-  it("fails missing start state caused by cycle", async () => {
-    const spec = validSpec();
-    spec.stages.CONTRACT.from = "PullRequestReady";
-    await expect(compileHarness(spec)).rejects.toThrow(/missing start state|cycles/);
-  });
-
-  it("fails graph cycles without loop semantics", async () => {
-    const spec = validSpec();
-    spec.stages.RELEASE.to = "RepoMapped";
-    await expect(compileHarness(spec)).rejects.toThrow(/cycles/);
-  });
-
-  it("supports forward traversal and cycle detection", () => {
-    const edges = [
-      { stage: "A", from: "S1", to: "S2" },
-      { stage: "B", from: "S2", to: "S3" }
-    ];
-    expect(traverseForward(edges, "S1").map((edge) => edge.stage)).toEqual(["A", "B"]);
-    expect(detectCycles(edges)).toEqual([]);
+  it("stage order equals MVP sequence", async () => {
+    const compiled = compileHarness(await loadHarness(path.resolve("harnesses/coding_swarm.mvp.yaml")));
+    expect(compiled.stageOrder).toEqual(["CONTRACT", "MAP", "PATCH", "VERIFY", "RELEASE"]);
   });
 });

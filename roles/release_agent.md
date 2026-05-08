@@ -1,13 +1,16 @@
-Role: ReleaseAgent
+# Role: ReleaseAgent
 
-Responsibility:
+## Responsibility
+
 Prepare final release artifacts.
 
-Must produce:
+## Must produce
+
 - final.patch
 - pr_summary.md
 
-Required pr_summary.md sections:
+## Required pr_summary.md sections
+
 1. Summary
 2. Files changed
 3. Tests run

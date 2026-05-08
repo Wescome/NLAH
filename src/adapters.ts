@@ -1,6 +1,6 @@
 import path from "node:path";
 import { execa } from "execa";
-import { NlahError } from "./errors";
+import { RuntimeError } from "./errors.js";
 
 export type AdapterResult = {
   ok: boolean;
@@ -14,7 +14,7 @@ export class ShellAdapter {
 
   async run(command: string[], cwd: string, timeoutSeconds = 120): Promise<AdapterResult> {
     if (!Array.isArray(command) || command.length === 0 || command.some((part) => typeof part !== "string")) {
-      throw new NlahError("command must be a non-empty string[]");
+      throw new RuntimeError("command must be a non-empty string[]");
     }
 
     const resolvedCwd = path.resolve(cwd);
@@ -24,12 +24,16 @@ export class ShellAdapter {
         (root) => resolvedCwd === root || resolvedCwd.startsWith(`${root}${path.sep}`)
       );
       if (!insideAllowedRoot) {
-        throw new NlahError(`working directory is outside allowed roots: ${cwd}`);
+        throw new RuntimeError(`working directory is outside allowed roots: ${cwd}`);
       }
     }
 
     try {
-      const result = await execa(command[0], command.slice(1), {
+      const executable = command[0];
+      if (!executable) {
+        throw new RuntimeError("command must include an executable");
+      }
+      const result = await execa(executable, command.slice(1), {
         cwd: resolvedCwd,
         timeout: timeoutSeconds * 1000,
         reject: false
