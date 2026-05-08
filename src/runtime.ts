@@ -166,6 +166,12 @@ export async function runHarness(
       };
       const workerOutput = await stageWorker.execute(workerInput, artifacts);
       validateWorkerCreatedArtifacts(stageEntry.spec.outputs, workerOutput.createdArtifacts);
+      await logger.emit(
+        "worker_completed",
+        workerOutput.message === undefined
+          ? { stage: stageEntry.name }
+          : { stage: stageEntry.name, message: workerOutput.message }
+      );
 
       for (const artifact of workerOutput.createdArtifacts) {
         state.artifacts[artifact] = await artifacts.status(artifact);

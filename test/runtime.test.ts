@@ -43,6 +43,7 @@ describe("runtime", () => {
       for (const event of [
         "run_started",
         "stage_started",
+        "worker_completed",
         "artifact_created",
         "gate_passed",
         "state_transition",
@@ -51,6 +52,114 @@ describe("runtime", () => {
       ]) {
         expect(trace).toContain(event);
       }
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("emits worker_completed before gate_passed for the same stage", async () => {
+    const root = await tempDir("nlah-runtime-worker-trace-order-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const cwd = process.cwd();
+    process.chdir(root);
+    try {
+      const result = await runHarness(
+        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        repo,
+        taskPath,
+        "runtime-worker-trace-order-test"
+      );
+      const events = (await readFile(result.tracePath, "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as { event: string; stage?: string });
+      const workerCompletedIndex = events.findIndex(
+        (event) => event.event === "worker_completed" && event.stage === "CONTRACT"
+      );
+      const gatePassedIndex = events.findIndex((event) => event.event === "gate_passed" && event.stage === "CONTRACT");
+
+      expect(workerCompletedIndex).toBeGreaterThan(-1);
+      expect(gatePassedIndex).toBeGreaterThan(-1);
+      expect(workerCompletedIndex).toBeLessThan(gatePassedIndex);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("worker_completed includes worker message when present", async () => {
+    const root = await tempDir("nlah-runtime-worker-message-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const cwd = process.cwd();
+
+    class MessageWorker implements WorkerAdapter {
+      private readonly deterministic = new DeterministicWorkerAdapter();
+
+      async execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput> {
+        const output = await this.deterministic.execute(input, artifacts);
+        return { ...output, message: `completed ${input.stageName}` };
+      }
+    }
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(
+        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        repo,
+        taskPath,
+        "runtime-worker-message-test",
+        new MessageWorker()
+      );
+      const events = (await readFile(result.tracePath, "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as { event: string; stage?: string; message?: string });
+
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          event: "worker_completed",
+          stage: "CONTRACT",
+          message: "completed CONTRACT"
+        })
+      );
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("failed worker execution does not emit worker_completed for that stage", async () => {
+    const root = await tempDir("nlah-runtime-worker-failure-trace-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const cwd = process.cwd();
+
+    class ThrowingWorker implements WorkerAdapter {
+      async execute(): Promise<WorkerOutput> {
+        throw new Error("worker failed");
+      }
+    }
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(
+        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        repo,
+        taskPath,
+        "runtime-worker-failure-trace-test",
+        new ThrowingWorker()
+      );
+      const events = (await readFile(result.tracePath, "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as { event: string; stage?: string });
+
+      expect(result.status).toBe("FAIL");
+      expect(events).not.toContainEqual(expect.objectContaining({ event: "worker_completed", stage: "CONTRACT" }));
+      expect(events).toContainEqual(expect.objectContaining({ event: "run_failed" }));
     } finally {
       process.chdir(cwd);
     }
