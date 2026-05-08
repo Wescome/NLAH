@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { cp, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import YAML from "yaml";
 import { FakeMvpLlmProvider } from "../examples/mock_llm_demo.js";
 import { LlmWorkerAdapter } from "../src/llm_worker.js";
 import { runHarness } from "../src/runtime.js";
 import { WorkerRegistry } from "../src/worker_registry.js";
-import { createTargetRepo, tempDir, writeHarness } from "./helpers.js";
+import { createTargetRepo, tempDir } from "./helpers.js";
 
 describe("llm worker runtime", () => {
   it("executes the MVP harness through LlmWorkerAdapter and a fake provider", async () => {
@@ -14,16 +13,6 @@ describe("llm worker runtime", () => {
     const repo = await createTargetRepo(root);
     const taskPath = path.join(root, "TASK.md");
     await cp(path.resolve("examples/TASK.md"), taskPath);
-
-    const harness = YAML.parse(await readFile(path.resolve("harnesses/coding_swarm.mvp.yaml"), "utf8")) as {
-      stages: {
-        MAP: { inputs?: string[] };
-        RELEASE: { inputs?: string[] };
-      };
-    };
-    harness.stages.MAP.inputs = ["IssueContract"];
-    const harnessPath = await writeHarness(root, YAML.stringify(harness));
-
     const provider = new FakeMvpLlmProvider();
     const workerRegistry = new WorkerRegistry({
       defaultWorker: "mock-llm",
@@ -33,7 +22,7 @@ describe("llm worker runtime", () => {
 
     process.chdir(root);
     try {
-      const result = await runHarness(harnessPath, repo, taskPath, {
+      const result = await runHarness(path.join(cwd, "harnesses/coding_swarm.mvp.yaml"), repo, taskPath, {
         runId: "llm-worker-runtime-test",
         workerRegistry
       });
@@ -53,9 +42,16 @@ describe("llm worker runtime", () => {
       const mapRequest = provider.requests.find((request) => request.stageName === "MAP");
       expect(mapRequest?.inputArtifacts.IssueContract).toContain("# Issue Contract");
 
+      const patchRequest = provider.requests.find((request) => request.stageName === "PATCH");
+      expect(patchRequest?.inputArtifacts.IssueContract).toContain("# Issue Contract");
+      expect(patchRequest?.inputArtifacts.RepoMap).toContain("# Repo Map");
+
+      const verifyRequest = provider.requests.find((request) => request.stageName === "VERIFY");
+      expect(verifyRequest?.inputArtifacts.CandidatePatch).toContain("return a + b;");
+
       const releaseRequest = provider.requests.find((request) => request.stageName === "RELEASE");
-      expect(harness.stages.RELEASE.inputs).toBeUndefined();
-      expect(releaseRequest?.inputArtifacts.CandidatePatch).toBeUndefined();
+      expect(releaseRequest?.inputArtifacts.CandidatePatch).toContain("return a + b;");
+      expect(releaseRequest?.inputArtifacts.VerifierReport).toContain("Verdict: PASS");
     } finally {
       process.chdir(cwd);
     }

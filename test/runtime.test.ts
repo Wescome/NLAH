@@ -193,6 +193,15 @@ describe("runtime", () => {
         calls.push(input.stageName);
         expect(input.context.taskText).toContain("Fix `add(a, b)`");
         expect(input.context.outputArtifactPaths).toBeDefined();
+        if (input.stageName === "MAP") {
+          expect(input.declaredInputs).toEqual(["IssueContract"]);
+          expect(input.context.inputArtifacts.IssueContract).toContain("# Issue Contract");
+        }
+        if (input.stageName === "RELEASE") {
+          expect(input.declaredInputs).toEqual(["IssueContract", "RepoMap", "CandidatePatch", "VerifierReport"]);
+          expect(input.context.inputArtifacts.CandidatePatch).toContain("return a + b;");
+          expect(input.context.inputArtifacts.VerifierReport).toContain("Verdict: PASS");
+        }
         return this.deterministic.execute(input, artifacts);
       }
     }

@@ -128,9 +128,14 @@ export class FakeMvpLlmProvider implements LlmProvider {
     }
 
     if (request.stageName === "RELEASE") {
+      const finalPatch = request.inputArtifacts.CandidatePatch;
+      if (!finalPatch) {
+        throw new Error("CandidatePatch input artifact is required for RELEASE");
+      }
+
       return {
         artifacts: {
-          FinalPatch: request.inputArtifacts.CandidatePatch ?? candidatePatch,
+          FinalPatch: finalPatch,
           PRSummary: prSummary
         },
         message: "mock RELEASE complete"
