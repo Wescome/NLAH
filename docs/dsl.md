@@ -12,6 +12,8 @@ The MVP crew DSL is a YAML document with:
 
 Stages define transitions from one runtime state to another. Artifacts and gates define the executable contract for completing each transition.
 
+Stage `inputs` declare the upstream artifact contents that workers receive in `StageContext.inputArtifacts`. The MVP crew harness treats these declarations as part of its dataflow contract.
+
 The canonical MVP crew harness is:
 
 ```text
