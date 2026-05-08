@@ -74,6 +74,12 @@ The runtime validates `WorkerOutput.createdArtifacts`:
 - omitting a declared output fails the run
 - reporting a declared artifact without writing a non-empty file fails the run
 
+## LLM Worker Interface Stub
+
+`LlmWorkerAdapter` defines a provider-neutral worker boundary without integrating a provider. It accepts an `LlmProvider` with a single `complete(request)` method, builds a request from `StageContext`, writes returned artifact content through `ArtifactManager`, and returns the created artifact names.
+
+No OpenAI, Anthropic, Codex, Claude, LangGraph, or external API calls are implemented in this adapter.
+
 ## `StageContext`
 
 `StageContext` is the structured execution packet passed to workers:
