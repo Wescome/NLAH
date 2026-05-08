@@ -30,4 +30,23 @@ describe("schema validation", () => {
     expect(stage.inputs).toEqual([]);
     expect(stage.outputs).toEqual([]);
   });
+
+  it("stage parses without worker", () => {
+    const stage = StageSpecSchema.parse({
+      from: "A",
+      to: "B",
+      role: "Cartographer"
+    });
+    expect(stage.worker).toBeUndefined();
+  });
+
+  it("stage parses with worker", () => {
+    const stage = StageSpecSchema.parse({
+      from: "A",
+      to: "B",
+      role: "Cartographer",
+      worker: "fake"
+    });
+    expect(stage.worker).toBe("fake");
+  });
 });

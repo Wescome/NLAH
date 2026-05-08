@@ -31,6 +31,7 @@ export const StageSpecSchema = z.object({
   from: z.string().min(1),
   to: z.string().min(1),
   role: z.string().min(1),
+  worker: z.string().min(1).optional(),
   inputs: z.array(z.string()).default([]),
   outputs: z.array(z.string()).default([]),
   gate: GateSpecSchema.optional()

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { cp, readFile, stat } from "node:fs/promises";
+import { cp, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import YAML from "yaml";
 import { runHarness } from "../src/runtime.js";
 import type { ArtifactManager } from "../src/artifacts.js";
 import { DeterministicWorkerAdapter, type WorkerAdapter, type WorkerInput, type WorkerOutput } from "../src/workers.js";
-import { createTargetRepo, tempDir } from "./helpers.js";
+import { WorkerRegistry } from "../src/worker_registry.js";
+import { createTargetRepo, tempDir, validSpec } from "./helpers.js";
 
 describe("runtime", () => {
   it("executes the MVP harness to PASS with required files and trace events", async () => {
@@ -148,6 +150,105 @@ describe("runtime", () => {
 
       expect(result.status).toBe("PASS");
       await expect(readFile(path.join(result.artifactRoot, "pr_summary.md"), "utf8")).resolves.toContain("src/math.ts");
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("uses workerRegistry default when no stage worker is specified", async () => {
+    const root = await tempDir("nlah-runtime-registry-default-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const cwd = process.cwd();
+    const calls: string[] = [];
+
+    class RegistryDefaultWorker implements WorkerAdapter {
+      private readonly deterministic = new DeterministicWorkerAdapter();
+
+      async execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput> {
+        calls.push(input.stageName);
+        return this.deterministic.execute(input, artifacts);
+      }
+    }
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(
+        path.join(cwd, "harnesses/coding_swarm.mvp.yaml"),
+        repo,
+        taskPath,
+        {
+          runId: "runtime-registry-default-test",
+          workerRegistry: new WorkerRegistry({
+            defaultWorker: "registryDefault",
+            workers: { registryDefault: new RegistryDefaultWorker() }
+          })
+        }
+      );
+
+      expect(result.status).toBe("PASS");
+      expect(calls).toEqual(["CONTRACT", "MAP", "PATCH", "VERIFY", "RELEASE"]);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("uses stage-specific worker when specified", async () => {
+    const root = await tempDir("nlah-runtime-stage-worker-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const spec = validSpec();
+    spec.stages.CONTRACT!.worker = "fake";
+    const harnessPath = path.join(root, "harness.yaml");
+    await writeFile(harnessPath, YAML.stringify(spec), "utf8");
+    const cwd = process.cwd();
+    const calls: string[] = [];
+
+    class FakeStageWorker implements WorkerAdapter {
+      private readonly deterministic = new DeterministicWorkerAdapter();
+
+      async execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput> {
+        calls.push(input.stageName);
+        return this.deterministic.execute(input, artifacts);
+      }
+    }
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(harnessPath, repo, taskPath, {
+        runId: "runtime-stage-worker-test",
+        workerRegistry: new WorkerRegistry({ workers: { fake: new FakeStageWorker() } })
+      });
+
+      expect(result.status).toBe("PASS");
+      expect(calls).toEqual(["CONTRACT"]);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("unknown stage worker returns FAIL result", async () => {
+    const root = await tempDir("nlah-runtime-unknown-worker-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const spec = validSpec();
+    spec.stages.CONTRACT!.worker = "missing";
+    const harnessPath = path.join(root, "harness.yaml");
+    await writeFile(harnessPath, YAML.stringify(spec), "utf8");
+    const cwd = process.cwd();
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(harnessPath, repo, taskPath, {
+        runId: "runtime-unknown-worker-test",
+        workerRegistry: new WorkerRegistry()
+      });
+
+      expect(result.status).toBe("FAIL");
+      expect(result.message).toContain("unknown worker: missing");
     } finally {
       process.chdir(cwd);
     }

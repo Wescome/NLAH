@@ -9,6 +9,37 @@ import type { RuntimeResult, RuntimeState } from "./state.js";
 import { RuntimeError } from "./errors.js";
 import { DeterministicWorkerAdapter, type WorkerAdapter } from "./workers.js";
 import { buildStageContext, roleNameToFileName } from "./context.js";
+import type { WorkerRegistry } from "./worker_registry.js";
+
+export type RunHarnessOptions = {
+  runId?: string;
+  workerAdapter?: WorkerAdapter;
+  workerRegistry?: WorkerRegistry;
+};
+
+type NormalizedRunHarnessOptions = {
+  runId: string;
+  workerAdapter?: WorkerAdapter;
+  workerRegistry?: WorkerRegistry;
+};
+
+function normalizeRunHarnessOptions(
+  runIdOrOptions?: string | RunHarnessOptions,
+  workerAdapter?: WorkerAdapter
+): NormalizedRunHarnessOptions {
+  if (typeof runIdOrOptions === "string" || runIdOrOptions === undefined) {
+    return {
+      runId: runIdOrOptions ?? randomUUID(),
+      ...(workerAdapter === undefined ? {} : { workerAdapter })
+    };
+  }
+
+  return {
+    runId: runIdOrOptions.runId ?? randomUUID(),
+    ...(runIdOrOptions.workerAdapter === undefined ? {} : { workerAdapter: runIdOrOptions.workerAdapter }),
+    ...(runIdOrOptions.workerRegistry === undefined ? {} : { workerRegistry: runIdOrOptions.workerRegistry })
+  };
+}
 
 async function failRun(
   logger: TraceLogger,
@@ -27,16 +58,17 @@ export async function runHarness(
   harnessPath: string,
   repoPath: string,
   taskPath: string,
-  runId?: string,
-  workerAdapter: WorkerAdapter = new DeterministicWorkerAdapter()
+  runIdOrOptions?: string | RunHarnessOptions,
+  workerAdapter?: WorkerAdapter
 ): Promise<RuntimeResult> {
-  runId ??= randomUUID();
+  const options = normalizeRunHarnessOptions(runIdOrOptions, workerAdapter);
+  const fallbackWorkerAdapter = new DeterministicWorkerAdapter();
   const resolvedHarnessPath = path.resolve(harnessPath);
   const resolvedRepoPath = path.resolve(repoPath);
   const resolvedTaskPath = path.resolve(taskPath);
   const compiled = compileHarness(await loadHarness(resolvedHarnessPath));
 
-  const runRoot = path.resolve("runs", runId);
+  const runRoot = path.resolve("runs", options.runId);
   const stateRoot = path.join(runRoot, "state");
   const artifactRoot = path.join(runRoot, "artifacts");
   const tracePath = path.join(stateRoot, "task_history.jsonl");
@@ -45,9 +77,9 @@ export async function runHarness(
   await copyFile(resolvedTaskPath, path.join(runRoot, "TASK.md"));
 
   const artifacts = new ArtifactManager(runRoot, compiled.spec);
-  const logger = new TraceLogger(tracePath, runId);
+  const logger = new TraceLogger(tracePath, options.runId);
   const state: RuntimeState = {
-    runId,
+    runId: options.runId,
     currentState: compiled.startState,
     taskPath: resolvedTaskPath,
     repoPath: resolvedRepoPath,
@@ -60,7 +92,7 @@ export async function runHarness(
   };
 
   const resultBase = {
-    runId,
+    runId: options.runId,
     finalState: state.currentState,
     runRoot,
     artifactRoot,
@@ -86,6 +118,14 @@ export async function runHarness(
         toState: stageEntry.spec.to
       });
 
+      const stageWorker =
+        options.workerAdapter ??
+        (options.workerRegistry
+          ? stageEntry.spec.worker
+            ? options.workerRegistry.get(stageEntry.spec.worker)
+            : options.workerRegistry.getDefault()
+          : fallbackWorkerAdapter);
+
       const rolePath = path.resolve(
         path.dirname(resolvedHarnessPath),
         "..",
@@ -107,7 +147,7 @@ export async function runHarness(
         declaredInputs: stageEntry.spec.inputs,
         declaredOutputs: stageEntry.spec.outputs
       };
-      const workerOutput = await workerAdapter.execute(workerInput, artifacts);
+      const workerOutput = await stageWorker.execute(workerInput, artifacts);
 
       for (const artifact of workerOutput.createdArtifacts) {
         state.artifacts[artifact] = await artifacts.status(artifact);
