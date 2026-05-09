@@ -1,0 +1,196 @@
+# Aider CLI Worker Design v1
+
+## Purpose
+
+`AiderCliWorkerAdapter` will be the first external coding-tool worker built on top of `LocalCliCodingWorkerAdapter` and `ShellAdapter`.
+
+The adapter is intended to prove that NLAH can delegate a crew stage to an existing local coding tool while preserving the runtime contract: stages are still governed by declared artifacts, gates, state transitions, and trace records.
+
+## Positioning
+
+NLAH remains the crew runtime.
+
+Aider is only a worker substrate. It must not own crew semantics, stage graph construction, artifact requirements, gate evaluation, state transitions, or trace persistence.
+
+The boundary is:
+
+```text
+NLAH crew runtime
+-> WorkerInput + StageContext
+-> AiderCliWorkerAdapter
+-> local aider command
+-> declared artifacts
+-> NLAH gates and trace
+```
+
+## Proposed Adapter
+
+```ts
+export class AiderCliWorkerAdapter implements WorkerAdapter {
+  // implementation packet: feat: add aider cli worker adapter
+}
+```
+
+The adapter should use `ShellAdapter` for process execution and command arrays only. It may share implementation patterns with `LocalCliCodingWorkerAdapter`, but it should keep Aider-specific prompt construction, diff capture, and artifact writing in its own module.
+
+## Configuration
+
+```ts
+export type AiderCliWorkerConfig = {
+  command?: string; // default "aider"
+  model?: string;
+  extraArgs?: string[];
+  timeoutSeconds?: number;
+};
+```
+
+`command` defaults to `aider`. `timeoutSeconds` should be required at runtime through an explicit default in the adapter, rather than allowing an unbounded process.
+
+## Expected Behavior
+
+For a stage executed by `AiderCliWorkerAdapter`:
+
+1. Receive `WorkerInput`.
+2. Write a stage prompt file under `runs/<runId>/worker_prompts/<stageName>.md`.
+3. Invoke the configured Aider command with `cwd = input.state.repoPath`.
+4. Allow Aider to edit repository files.
+5. Capture `git diff` after the command completes.
+6. Write `CandidatePatch` or other declared artifacts from the diff or stage outputs.
+7. Return the declared artifact names in `WorkerOutput.createdArtifacts`.
+8. Let NLAH gates verify patch application and release correctness.
+
+The adapter must not treat successful natural-language output from Aider as proof that the stage is complete. Stage completion still depends on artifact contract validation and gates.
+
+## MVP Stage Support
+
+Start with `PATCH` only.
+
+Other stages remain deterministic, script-backed, command-backed, or mock-backed until a later implementation packet expands support. The initial integration should bind only the `PATCH` stage to the Aider worker through `WorkerRegistry` while the rest of the crew remains unchanged.
+
+## Safety
+
+The adapter must enforce these constraints:
+
+- no `shell=true`
+- command array only
+- `cwd = repoPath`
+- timeout required
+- no auto commit
+- no push
+- no destructive git operations
+- generated prompt stored as an artifact or run file
+
+The adapter must not run `git reset`, `git checkout`, forced clean operations, commits, or pushes. If cleanup is needed, it belongs outside the adapter and must be explicit.
+
+## Prompt File
+
+The generated prompt path is:
+
+```text
+runs/<runId>/worker_prompts/<stageName>.md
+```
+
+The prompt must include:
+
+- task text
+- role text
+- input artifacts
+- declared outputs
+- instruction to produce a minimal patch
+- instruction not to commit
+
+Prompt outline:
+
+```md
+# NLAH Stage Prompt
+
+## Stage
+
+PATCH
+
+## Task
+
+...
+
+## Role Policy
+
+...
+
+## Input Artifacts
+
+### IssueContract
+
+...
+
+### RepoMap
+
+...
+
+## Declared Outputs
+
+- CandidatePatch
+
+## Instructions
+
+Produce the smallest correct repository change for this stage.
+Do not commit.
+Do not push.
+Do not perform destructive git operations.
+```
+
+## Patch Capture
+
+After Aider exits successfully, the adapter should run:
+
+```text
+git diff -- src
+```
+
+or a configured non-destructive diff command. For the initial MVP, writing `CandidatePatch` from `git diff` is sufficient.
+
+If the diff is empty, the adapter must fail with a `RuntimeError` instead of writing an empty `CandidatePatch`.
+
+The runtime will still enforce:
+
+- `createdArtifacts` exactly match declared outputs
+- declared artifact files exist
+- declared artifact files are non-empty
+- gates pass
+
+## Test Plan
+
+Tests should avoid invoking real Aider.
+
+Required tests:
+
+- unit test command construction without running Aider
+- fake shell test simulates Aider output
+- generated prompt contains `taskText`
+- generated prompt contains input artifacts
+- `CandidatePatch` is written from `git diff`
+- missing diff fails
+- adapter returns declared artifact names
+- adapter does not auto commit or push
+
+The fake shell should capture command arrays and return controlled stdout, stderr, return code, and diff content without spawning external tooling.
+
+## Implementation Packet
+
+Next implementation packet:
+
+```text
+feat: add aider cli worker adapter
+```
+
+## Verification
+
+The adapter implementation must preserve:
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm run:mvp
+pnpm run:script-demo
+pnpm run:mock-llm-demo
+pnpm run:local-cli-demo
+```
