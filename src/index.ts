@@ -13,6 +13,7 @@ export * from "./context.js";
 export * from "./command_worker.js";
 export * from "./script_worker.js";
 export * from "./local_cli_coding_worker.js";
+export * from "./aider_cli_worker.js";
 export * from "./worker_registry.js";
 export * from "./llm_worker.js";
 export * from "./validator.js";

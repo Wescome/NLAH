@@ -67,6 +67,8 @@ The CLI currently supports `--worker deterministic`. Programmatic callers can re
 
 `pnpm run:local-cli-demo` runs the full MVP crew harness through `LocalCliCodingWorkerAdapter` with local Node commands. It is a runtime wiring demo and does not add any external coding tool dependency.
 
+`AiderCliWorkerAdapter` is the first external-tool worker adapter. It writes a stage prompt under `runs/<runId>/worker_prompts/<stageName>.md`, invokes a configured Aider command through `ShellAdapter`, captures a non-empty git diff, and writes `CandidatePatch`. The v1 adapter supports `CandidatePatch` output only and does not add Aider as a package dependency.
+
 ## `WorkerAdapter`
 
 ```ts
