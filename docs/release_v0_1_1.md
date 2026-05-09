@@ -73,7 +73,17 @@ Manual execution requires:
 NLAH_RUN_REAL_AIDER=1 pnpm run:aider-patch-demo
 ```
 
-Aider is not a package dependency. The demo config includes `--no-auto-commits` and `--no-gitignore`.
+Aider is not a package dependency. The demo config includes `--yes`, `--no-auto-commits`, and `--no-gitignore`. The demo Aider timeout is 120 seconds.
+
+A captured real run showed Aider entering normal model mode after reading `--message-file`:
+
+```text
+Using gpt-4o model with API key from environment.
+Aider v0.86.2
+Repo-map: using 4096 tokens, auto refresh
+```
+
+The runtime trace stopped at `stage_started PATCH`, with no `worker_completed`, because Aider did not exit. The demo passes `--yes` to force non-interactive confirmations.
 
 A captured real-run Aider history showed:
 

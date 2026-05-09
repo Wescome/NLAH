@@ -105,7 +105,17 @@ Without `NLAH_RUN_REAL_AIDER=1`, the script prints:
 Refusing to run real Aider. Set NLAH_RUN_REAL_AIDER=1 to run this demo.
 ```
 
-The demo config includes `--no-auto-commits` and `--no-gitignore`. The adapter does not commit or push.
+The demo config includes `--yes`, `--no-auto-commits`, and `--no-gitignore`. The adapter does not commit or push. The demo timeout is 120 seconds.
+
+The `--yes` flag is demo-specific. A captured real run showed Aider entering normal model mode after reading `--message-file`:
+
+```text
+Using gpt-4o model with API key from environment.
+Aider v0.86.2
+Repo-map: using 4096 tokens, auto refresh
+```
+
+The runtime trace stopped at `stage_started PATCH`, with no `worker_completed`, because Aider did not exit. The demo now passes `--yes` to force non-interactive confirmations.
 
 The `--no-gitignore` flag is demo-specific. A captured real-run Aider history showed:
 

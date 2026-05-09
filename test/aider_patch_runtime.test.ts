@@ -144,6 +144,7 @@ describe("aider PATCH runtime demo", () => {
 
       expect(fakeShell.calls).toHaveLength(2);
       expect(fakeShell.calls[0]?.command[0]).toBe("aider");
+      expect(fakeShell.calls[0]?.command).toContain("--yes");
       expect(fakeShell.calls[0]?.command).toContain("--no-auto-commits");
       expect(fakeShell.calls[0]?.command).toContain("--no-gitignore");
       expect(fakeShell.calls[1]?.command[0]).toBe("git");
