@@ -16,6 +16,7 @@
     "run:script-demo": "tsx examples/script_worker_demo.ts",
     "run:mock-llm-demo": "tsx examples/mock_llm_demo.ts",
     "run:local-cli-demo": "tsx examples/local_cli_demo.ts",
+    "run:aider-patch-demo": "tsx examples/aider_patch_demo.ts",
     "run:legacy-coding-swarm": "tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md",
     "verify": "pnpm typecheck && pnpm test"
   },

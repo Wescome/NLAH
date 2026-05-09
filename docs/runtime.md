@@ -69,6 +69,8 @@ The CLI currently supports `--worker deterministic`. Programmatic callers can re
 
 `AiderCliWorkerAdapter` is the first external-tool worker adapter. It writes a stage prompt under `runs/<runId>/worker_prompts/<stageName>.md`, invokes a configured Aider command through `ShellAdapter`, captures a non-empty git diff, and writes `CandidatePatch`. The v1 adapter supports `CandidatePatch` output only and does not add Aider as a package dependency.
 
+`pnpm run:aider-patch-demo` wires `AiderCliWorkerAdapter` into the `PATCH` stage while deterministic workers handle the other stages. The automated tests use a fake shell and do not invoke real Aider; the script is optional and requires Aider to be available locally.
+
 ## `WorkerAdapter`
 
 ```ts
