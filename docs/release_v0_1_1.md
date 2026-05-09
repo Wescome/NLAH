@@ -73,7 +73,13 @@ Manual execution requires:
 NLAH_RUN_REAL_AIDER=1 pnpm run:aider-patch-demo
 ```
 
-Aider is not a package dependency. The demo config includes `--yes`, `--no-auto-commits`, and `--no-gitignore`. The demo Aider timeout is 120 seconds.
+Aider is not a package dependency. The demo config includes `--yes`, `--no-auto-commits`, `--no-gitignore`, `--map-tokens 0`, and `--no-restore-chat-history`. The demo Aider timeout is 120 seconds.
+
+The current manual Aider command shape is:
+
+```text
+aider --yes --no-auto-commits --no-gitignore --map-tokens 0 --no-restore-chat-history --message-file <PATCH.md>
+```
 
 A captured real run showed Aider entering normal model mode after reading `--message-file`:
 
@@ -100,6 +106,14 @@ A later real run exposed a LiteLLM/OpenAI encoding failure:
 ```
 
 The Aider prompt file now normalizes common Unicode punctuation to ASCII before writing the message file. This is Aider-specific prompt normalization and does not mutate `StageContext` or other runtime artifacts.
+
+After that prompt normalization, `PATCH.md` was verified ASCII-only, but a real run still reported:
+
+```text
+OpenAIException - 'ascii' codec can't encode character '\u201c'
+```
+
+Aider v0.86.2 does not support `--no-map`, so the demo uses `--map-tokens 0` to disable repo map generation. The demo also disables chat history restoration to isolate Aider from non-prompt Unicode sources.
 
 ## Fake-Shell Test Strategy
 

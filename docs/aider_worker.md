@@ -105,7 +105,13 @@ Without `NLAH_RUN_REAL_AIDER=1`, the script prints:
 Refusing to run real Aider. Set NLAH_RUN_REAL_AIDER=1 to run this demo.
 ```
 
-The demo config includes `--yes`, `--no-auto-commits`, and `--no-gitignore`. The adapter does not commit or push. The demo timeout is 120 seconds.
+The demo config includes `--yes`, `--no-auto-commits`, `--no-gitignore`, `--map-tokens 0`, and `--no-restore-chat-history`. The adapter does not commit or push. The demo timeout is 120 seconds.
+
+The current manual Aider command shape is:
+
+```text
+aider --yes --no-auto-commits --no-gitignore --map-tokens 0 --no-restore-chat-history --message-file <PATCH.md>
+```
 
 The `--yes` flag is demo-specific. A captured real run showed Aider entering normal model mode after reading `--message-file`:
 
@@ -124,6 +130,16 @@ You can skip this check with --no-gitignore
 ```
 
 Without that flag, Aider may pause or block on a gitignore check in non-interactive manual runs.
+
+The repo-map isolation flag is demo-specific. Aider v0.86.2 does not support `--no-map`; the supported command shape is `--map-tokens 0`.
+
+`--map-tokens 0` and `--no-restore-chat-history` are also demo-specific. After prompt normalization, `PATCH.md` was verified ASCII-only, but a real run still hit:
+
+```text
+OpenAIException - 'ascii' codec can't encode character '\u201c'
+```
+
+The demo disables repo map generation and chat history restoration to isolate Aider from non-prompt Unicode sources while preserving the NLAH runtime behavior.
 
 After `NLAH_RUN_REAL_AIDER=1` is set, the demo runs a preflight check with `aider --version`. If Aider is unavailable, it prints install guidance and exits before `runHarness` starts.
 

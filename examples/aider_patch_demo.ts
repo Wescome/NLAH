@@ -16,7 +16,14 @@ export function createAiderPatchDemoRegistry(shell?: ShellRunner): WorkerRegistr
   const aiderWorker = new AiderCliWorkerAdapter(
     {
       command: "aider",
-      extraArgs: ["--yes", "--no-auto-commits", "--no-gitignore"],
+      extraArgs: [
+        "--yes",
+        "--no-auto-commits",
+        "--no-gitignore",
+        "--map-tokens",
+        "0",
+        "--no-restore-chat-history"
+      ],
       timeoutSeconds: 120
     },
     shell
