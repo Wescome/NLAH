@@ -4,7 +4,7 @@ import YAML from "yaml";
 import { describe, expect, it } from "vitest";
 import type { AdapterResult } from "../src/adapters.js";
 import { runHarness } from "../src/runtime.js";
-import { createAiderPatchDemoRegistry } from "../examples/aider_patch_demo.js";
+import { createAiderPatchDemoRegistry, runAiderPatchDemo } from "../examples/aider_patch_demo.js";
 import { createTargetRepo, tempDir } from "./helpers.js";
 
 const mathPatch = [
@@ -77,6 +77,35 @@ async function writeAiderPatchHarness(root: string): Promise<string> {
 }
 
 describe("aider PATCH runtime demo", () => {
+  it("refuses the manual demo when NLAH_RUN_REAL_AIDER is not set", async () => {
+    const previousEnv = process.env.NLAH_RUN_REAL_AIDER;
+    const previousExitCode = process.exitCode;
+    const previousError = console.error;
+    const messages: string[] = [];
+
+    delete process.env.NLAH_RUN_REAL_AIDER;
+    console.error = (...args: unknown[]) => {
+      messages.push(args.map(String).join(" "));
+    };
+
+    try {
+      await runAiderPatchDemo();
+
+      expect(process.exitCode).toBe(1);
+      expect(messages.join("\n")).toContain(
+        "Refusing to run real Aider. Set NLAH_RUN_REAL_AIDER=1 to run this demo."
+      );
+    } finally {
+      if (previousEnv === undefined) {
+        delete process.env.NLAH_RUN_REAL_AIDER;
+      } else {
+        process.env.NLAH_RUN_REAL_AIDER = previousEnv;
+      }
+      process.exitCode = previousExitCode;
+      console.error = previousError;
+    }
+  });
+
   it("executes PATCH through AiderCliWorkerAdapter while other stages use deterministic workers", async () => {
     const root = await tempDir("nlah-aider-patch-runtime-");
     const repo = await createTargetRepo(root);

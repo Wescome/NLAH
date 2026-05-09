@@ -82,6 +82,24 @@ The adapter must enforce these constraints:
 
 The adapter must not run `git reset`, `git checkout`, forced clean operations, commits, or pushes. If cleanup is needed, it belongs outside the adapter and must be explicit.
 
+## Manual Demo Guard
+
+The runtime demo script is optional because it invokes real local Aider. Aider is not a package dependency, and automated tests use a fake shell instead of invoking it.
+
+Manual runs must opt in explicitly:
+
+```bash
+NLAH_RUN_REAL_AIDER=1 pnpm run:aider-patch-demo
+```
+
+Without `NLAH_RUN_REAL_AIDER=1`, the script prints:
+
+```text
+Refusing to run real Aider. Set NLAH_RUN_REAL_AIDER=1 to run this demo.
+```
+
+The demo config includes `--no-auto-commits`. The adapter does not commit or push.
+
 ## Prompt File
 
 The generated prompt path is:

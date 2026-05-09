@@ -50,6 +50,12 @@ async function writeAiderPatchHarness(sourcePath: string, targetPath: string): P
 }
 
 export async function runAiderPatchDemo(): Promise<void> {
+  if (process.env.NLAH_RUN_REAL_AIDER !== "1") {
+    console.error("Refusing to run real Aider. Set NLAH_RUN_REAL_AIDER=1 to run this demo.");
+    process.exitCode = 1;
+    return;
+  }
+
   const harnessPath = path.resolve("runs", "aider-patch-demo-harness", "harnesses", "crew.aider_patch.yaml");
   await writeAiderPatchHarness("harnesses/crew.mvp.yaml", harnessPath);
 

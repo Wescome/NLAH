@@ -130,12 +130,17 @@ Unsupported CLI worker names fail before runtime execution with `unsupported CLI
 
 `LlmWorkerAdapter`: provider-neutral interface that accepts an injected provider. The repository includes only a fake local provider demo.
 
-`AiderCliWorkerAdapter`: planned external coding-tool adapter. See [docs/aider_worker.md](docs/aider_worker.md) for the design.
+`AiderCliWorkerAdapter`: external coding-tool adapter for PATCH-stage experiments. Aider is not a package dependency, automated tests use a fake shell, and the adapter does not commit or push. See [docs/aider_worker.md](docs/aider_worker.md).
+
+Manual Aider demo runs are guarded because they invoke real local Aider:
+
+```bash
+NLAH_RUN_REAL_AIDER=1 pnpm run:aider-patch-demo
+```
 
 ## Not Yet Implemented
 
 - external LLM provider integrations
-- Aider CLI worker implementation
 - LangGraph integration
 - GitHub PR automation
 - cloud execution
