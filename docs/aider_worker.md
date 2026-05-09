@@ -129,6 +129,16 @@ After `NLAH_RUN_REAL_AIDER=1` is set, the demo runs a preflight check with `aide
 
 ## Prompt File
 
+The Aider message file normalizes common Unicode punctuation to ASCII before writing the prompt. This is local to `AiderCliWorkerAdapter` prompt generation and does not mutate `StageContext` or runtime artifacts.
+
+A real run exposed a LiteLLM/OpenAI encoding failure:
+
+```text
+'ascii' codec can't encode character '\u201c'
+```
+
+The adapter normalizes curly quotes, en dashes, em dashes, ellipses, and non-breaking spaces in the Aider prompt file only.
+
 The generated prompt path is:
 
 ```text

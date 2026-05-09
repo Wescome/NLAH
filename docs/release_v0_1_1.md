@@ -93,6 +93,14 @@ You can skip this check with --no-gitignore
 
 The demo passes `--no-gitignore` because Aider may otherwise pause or block on a gitignore check in non-interactive use.
 
+A later real run exposed a LiteLLM/OpenAI encoding failure:
+
+```text
+'ascii' codec can't encode character '\u201c'
+```
+
+The Aider prompt file now normalizes common Unicode punctuation to ASCII before writing the message file. This is Aider-specific prompt normalization and does not mutate `StageContext` or other runtime artifacts.
+
 ## Fake-Shell Test Strategy
 
 Automated tests do not invoke real Aider.

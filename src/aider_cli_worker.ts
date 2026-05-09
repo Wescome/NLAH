@@ -29,7 +29,7 @@ export class AiderCliWorkerAdapter implements WorkerAdapter {
     }
 
     const promptPath = path.join(input.state.runRoot, "worker_prompts", `${input.stageName}.md`);
-    const prompt = buildAiderPrompt(input);
+    const prompt = normalizeAiderPromptText(buildAiderPrompt(input));
     await mkdir(path.dirname(promptPath), { recursive: true });
     await writeFile(promptPath, prompt, "utf8");
 
@@ -118,6 +118,15 @@ function buildAiderPrompt(input: WorkerInput): string {
   );
 
   return `${sections.join("\n")}\n`;
+}
+
+function normalizeAiderPromptText(value: string): string {
+  return value
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/\u2026/g, "...")
+    .replace(/\u00A0/g, " ");
 }
 
 function validateCommand(command: string[], label: string): void {

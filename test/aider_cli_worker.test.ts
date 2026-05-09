@@ -168,6 +168,37 @@ describe("AiderCliWorkerAdapter", () => {
     });
   });
 
+  it("normalizes common Unicode punctuation in the prompt file", async () => {
+    const { artifacts, input, root } = await fixture();
+    input.context = {
+      taskText: "Fix add() so it returns \u201Csum\u201D \u2014 not subtraction\u2026",
+      roleText: "Use the repo\u2019s style \u2013 keep it minimal.",
+      inputArtifacts: {
+        IssueContract: "Don\u2018t change unrelated files\u00A0or tests.",
+        RepoMap: "Relevant file: src/math.ts"
+      },
+      outputArtifactPaths: {
+        CandidatePatch: artifacts.resolve("CandidatePatch")
+      }
+    };
+    const shell = new FakeShell([ok("aider done"), ok(patch)]);
+    const worker = new AiderCliWorkerAdapter({}, shell);
+
+    await worker.execute(input, artifacts);
+
+    const prompt = await readFile(path.join(root, "worker_prompts", "PATCH.md"), "utf8");
+    expect(prompt).toContain('Fix add() so it returns "sum" - not subtraction...');
+    expect(prompt).toContain("Use the repo's style - keep it minimal.");
+    expect(prompt).toContain("Don't change unrelated files or tests.");
+    expect(prompt).toContain("Relevant file: src/math.ts");
+    expect(prompt).not.toContain("\u201C");
+    expect(prompt).not.toContain("\u201D");
+    expect(prompt).not.toContain("\u2014");
+    expect(prompt).not.toContain("\u2013");
+    expect(prompt).not.toContain("\u2026");
+    expect(prompt).not.toContain("\u00A0");
+  });
+
   it("runs the diff command after the aider command", async () => {
     const { artifacts, input } = await fixture();
     const shell = new FakeShell([ok("aider done"), ok(patch)]);
