@@ -124,6 +124,8 @@ Unsupported CLI worker names fail before runtime execution with `unsupported CLI
 
 ## Supported Workers
 
+Worker adapter matrix: [docs/worker_adapters.md](docs/worker_adapters.md).
+
 `deterministic`: default worker used by `pnpm run:mvp`. It writes deterministic MVP artifacts for the math fixture.
 
 `CommandWorkerAdapter`: in-process adapter API that dispatches stage names to registered TypeScript handler functions.
