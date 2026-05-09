@@ -36,6 +36,8 @@ Current capabilities:
 - worker registry and stage worker binding support
 - provider-neutral LLM worker interface with local mock demo only
 
+Release checklist: [NLAH v0.1.0 — Crew Runtime Foundation](docs/release_v0_1_0.md).
+
 ## Install
 
 ```bash
