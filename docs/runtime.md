@@ -65,6 +65,8 @@ The CLI currently supports `--worker deterministic`. Programmatic callers can re
 
 `LocalCliCodingWorkerAdapter` is a generic local command adapter for coding CLIs such as Aider, Codex CLI, Claude Code, OpenHands CLI, or custom local tools. It executes one configured `string[]` command per stage through `ShellAdapter`, receives the same `StageContext` as other workers, and reports declared outputs back to the runtime artifact contract.
 
+`pnpm run:local-cli-demo` runs the full MVP crew harness through `LocalCliCodingWorkerAdapter` with local Node commands. It is a runtime wiring demo and does not add any external coding tool dependency.
+
 ## `WorkerAdapter`
 
 ```ts

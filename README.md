@@ -50,6 +50,7 @@ pnpm test
 pnpm run:mvp
 pnpm run:script-demo
 pnpm run:mock-llm-demo
+pnpm run:local-cli-demo
 ```
 
 ## Run The Deterministic MVP
@@ -91,6 +92,14 @@ The mock LLM demo runs the same MVP crew harness through `LlmWorkerAdapter` with
 
 ```bash
 pnpm run:mock-llm-demo
+```
+
+## Local CLI Demo
+
+The local CLI demo runs the same MVP crew harness through `LocalCliCodingWorkerAdapter` and local Node commands:
+
+```bash
+pnpm run:local-cli-demo
 ```
 
 ## CLI JSON Output
