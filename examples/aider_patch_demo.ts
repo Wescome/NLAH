@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import { AiderCliWorkerAdapter } from "../src/aider_cli_worker.js";
+import { checkAiderAvailable } from "../src/aider_preflight.js";
 import type { ShellAdapter } from "../src/adapters.js";
 import { runHarness } from "../src/runtime.js";
 import { DeterministicWorkerAdapter } from "../src/workers.js";
@@ -52,6 +53,20 @@ async function writeAiderPatchHarness(sourcePath: string, targetPath: string): P
 export async function runAiderPatchDemo(): Promise<void> {
   if (process.env.NLAH_RUN_REAL_AIDER !== "1") {
     console.error("Refusing to run real Aider. Set NLAH_RUN_REAL_AIDER=1 to run this demo.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const preflight = await checkAiderAvailable();
+  if (!preflight.ok) {
+    console.error(
+      [
+        `Aider CLI is not available: ${preflight.message}`,
+        "Install Aider manually, then verify it:",
+        "python -m pip install aider-chat",
+        "aider --version"
+      ].join("\n")
+    );
     process.exitCode = 1;
     return;
   }

@@ -84,7 +84,14 @@ The adapter must not run `git reset`, `git checkout`, forced clean operations, c
 
 ## Manual Demo Guard
 
-The runtime demo script is optional because it invokes real local Aider. Aider is not a package dependency, and automated tests use a fake shell instead of invoking it.
+The runtime demo script is optional because it invokes real local Aider. Aider is not installed by this repo, is not a package dependency, and automated tests use a fake shell instead of invoking it.
+
+Install Aider manually before running the real demo:
+
+```bash
+python -m pip install aider-chat
+aider --version
+```
 
 Manual runs must opt in explicitly:
 
@@ -99,6 +106,8 @@ Refusing to run real Aider. Set NLAH_RUN_REAL_AIDER=1 to run this demo.
 ```
 
 The demo config includes `--no-auto-commits`. The adapter does not commit or push.
+
+After `NLAH_RUN_REAL_AIDER=1` is set, the demo runs a preflight check with `aider --version`. If Aider is unavailable, it prints install guidance and exits before `runHarness` starts.
 
 ## Prompt File
 
