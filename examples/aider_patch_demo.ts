@@ -16,7 +16,7 @@ export function createAiderPatchDemoRegistry(shell?: ShellRunner): WorkerRegistr
   const aiderWorker = new AiderCliWorkerAdapter(
     {
       command: "aider",
-      extraArgs: ["--no-auto-commits"],
+      extraArgs: ["--no-auto-commits", "--no-gitignore"],
       timeoutSeconds: 300
     },
     shell

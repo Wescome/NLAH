@@ -105,7 +105,15 @@ Without `NLAH_RUN_REAL_AIDER=1`, the script prints:
 Refusing to run real Aider. Set NLAH_RUN_REAL_AIDER=1 to run this demo.
 ```
 
-The demo config includes `--no-auto-commits`. The adapter does not commit or push.
+The demo config includes `--no-auto-commits` and `--no-gitignore`. The adapter does not commit or push.
+
+The `--no-gitignore` flag is demo-specific. A captured real-run Aider history showed:
+
+```text
+You can skip this check with --no-gitignore
+```
+
+Without that flag, Aider may pause or block on a gitignore check in non-interactive manual runs.
 
 After `NLAH_RUN_REAL_AIDER=1` is set, the demo runs a preflight check with `aider --version`. If Aider is unavailable, it prints install guidance and exits before `runHarness` starts.
 

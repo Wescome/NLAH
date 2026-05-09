@@ -73,7 +73,15 @@ Manual execution requires:
 NLAH_RUN_REAL_AIDER=1 pnpm run:aider-patch-demo
 ```
 
-Aider is not a package dependency. The demo config includes `--no-auto-commits`.
+Aider is not a package dependency. The demo config includes `--no-auto-commits` and `--no-gitignore`.
+
+A captured real-run Aider history showed:
+
+```text
+You can skip this check with --no-gitignore
+```
+
+The demo passes `--no-gitignore` because Aider may otherwise pause or block on a gitignore check in non-interactive use.
 
 ## Fake-Shell Test Strategy
 

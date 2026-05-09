@@ -149,6 +149,8 @@ Then opt in to the real demo:
 NLAH_RUN_REAL_AIDER=1 pnpm run:aider-patch-demo
 ```
 
+The demo passes `--no-auto-commits` and `--no-gitignore` to avoid commits and non-interactive gitignore prompts.
+
 ## Not Yet Implemented
 
 - external LLM provider integrations
