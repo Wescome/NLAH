@@ -18,6 +18,7 @@
     "run:local-cli-demo": "tsx examples/local_cli_demo.ts",
     "run:aider-patch-demo": "tsx examples/aider_patch_demo.ts",
     "run:pi-patch-demo": "tsx examples/pi_patch_demo.ts",
+    "run:loom-patch-demo": "tsx examples/loom_patch_demo.ts",
     "run:legacy-coding-swarm": "tsx src/cli.ts run --harness harnesses/coding_swarm.mvp.yaml --repo examples/target_repo_stub --task examples/TASK.md",
     "verify": "pnpm typecheck && pnpm test"
   },

@@ -41,6 +41,7 @@ Release notes:
 - [NLAH v0.1.0 — Crew Runtime Foundation](docs/release_v0_1_0.md)
 - [NLAH v0.1.1 — Worker Adapter Documentation and Aider Path](docs/release_v0_1_1.md)
 - [NLAH v0.1.2 — Pi CLI Worker Path](docs/release_v0_1_2.md)
+- [Loom CLI Worker](docs/loom_worker.md)
 
 ## Install
 
@@ -140,7 +141,9 @@ Worker adapter matrix: [docs/worker_adapters.md](docs/worker_adapters.md).
 
 `AiderCliWorkerAdapter`: external coding-tool adapter for PATCH-stage experiments. Aider is not a package dependency, automated tests use a fake shell, and the adapter does not commit or push. See [docs/aider_worker.md](docs/aider_worker.md).
 
-`PiCliWorkerAdapter`: CLI worker for Pi text/JSON print mode using `@file` prompt arguments. Tests use a fake shell; Pi is not a package dependency and is not invoked by tests. See [docs/pi_worker.md](docs/pi_worker.md).
+`PiCliWorkerAdapter`: CLI worker for Pi text/JSON print mode using `@file` prompt arguments. Tests use a fake shell; Pi is not a package dependency and is not invoked by tests. The guarded manual PATCH demo uses JSON print mode and writes Pi debug artifacts under `runs/<runId>/debug/` on command or diff-capture failure. See [docs/pi_worker.md](docs/pi_worker.md).
+
+`LoomCliWorkerAdapter`: preferred NLAH name for a domain-aware CLI worker built on the Pi command substrate. It adds domain prompt sections, fake-shell tests, a PATCH runtime demo, and Loom-named debug artifacts. See [docs/loom_worker.md](docs/loom_worker.md).
 
 The optional Pi PATCH demo wires Pi into the PATCH stage while deterministic workers handle the other stages:
 
@@ -149,6 +152,12 @@ NLAH_RUN_REAL_PI=1 pnpm run:pi-patch-demo
 ```
 
 Manual use requires Pi to be installed separately and verified with `pi --version`. Without `NLAH_RUN_REAL_PI=1`, the script refuses to run. Automated verification does not require real Pi.
+
+The preferred Loom-named PATCH demo uses the same guarded/manual model:
+
+```bash
+NLAH_RUN_REAL_LOOM=1 pnpm run:loom-patch-demo
+```
 
 Manual Aider demo runs are guarded because they invoke real local Aider. Aider is not installed by this repo; install and verify it manually first:
 

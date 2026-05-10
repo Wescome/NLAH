@@ -231,6 +231,17 @@ describe("LoomCliWorkerAdapter", () => {
       expect(shell.calls[0]?.command).not.toContain("json");
     });
 
+    it("builds the explicit text-mode command", async () => {
+      const { artifacts, input, root } = await fixture();
+      const shell = new FakeShell([ok("loom done"), ok(patch)]);
+      const worker = new LoomCliWorkerAdapter({ mode: "text" }, shell);
+      const promptPath = path.join(root, "worker_prompts", "PATCH.loom.md");
+
+      await worker.execute(input, artifacts);
+
+      expect(shell.calls[0]?.command).toEqual(["pi", "-p", `@${promptPath}`]);
+    });
+
     it("builds the json-mode command", async () => {
       const { artifacts, input, root } = await fixture();
       const shell = new FakeShell([ok("loom done"), ok(patch)]);
@@ -378,6 +389,65 @@ describe("LoomCliWorkerAdapter", () => {
       const worker = new LoomCliWorkerAdapter({}, shell);
 
       await expect(worker.execute(input, artifacts)).rejects.toThrow("timed out: true");
+    });
+
+    it("writes Loom debug artifacts when the command fails", async () => {
+      const { artifacts, input, root } = await fixture();
+      const shell = new FakeShell([
+        {
+          ok: false,
+          returncode: 1,
+          stdout: '{"type":"session_start"}\n',
+          stderr: "timed out",
+          timedOut: true,
+          signal: "SIGTERM",
+          failed: true
+        }
+      ]);
+      const worker = new LoomCliWorkerAdapter({ mode: "json" }, shell);
+
+      await expect(worker.execute(input, artifacts)).rejects.toThrow(`debug: ${path.join(root, "debug")}`);
+
+      const command = JSON.parse(await readFile(path.join(root, "debug", "loom.command.json"), "utf8")) as {
+        command: string[];
+      };
+      const result = JSON.parse(await readFile(path.join(root, "debug", "loom.result.json"), "utf8")) as AdapterResult;
+
+      expect(command.command).toEqual([
+        "pi",
+        "-p",
+        "--mode",
+        "json",
+        `@${path.join(root, "worker_prompts", "PATCH.loom.md")}`
+      ]);
+      await expect(readFile(path.join(root, "debug", "loom.stdout"), "utf8")).resolves.toBe(
+        '{"type":"session_start"}\n'
+      );
+      await expect(readFile(path.join(root, "debug", "loom.stderr"), "utf8")).resolves.toBe("timed out");
+      expect(result).toEqual({
+        ok: false,
+        returncode: 1,
+        stdout: '{"type":"session_start"}\n',
+        stderr: "timed out",
+        timedOut: true,
+        signal: "SIGTERM",
+        failed: true
+      });
+    });
+
+    it("writes diff debug artifacts when Loom exits without a diff", async () => {
+      const { artifacts, input, root } = await fixture();
+      const shell = new FakeShell([ok("loom done"), ok("   \n")]);
+      const worker = new LoomCliWorkerAdapter({}, shell);
+
+      await expect(worker.execute(input, artifacts)).rejects.toThrow("empty git diff");
+
+      await expect(readFile(path.join(root, "debug", "loom.stdout"), "utf8")).resolves.toBe("loom done");
+      await expect(readFile(path.join(root, "debug", "loom.diff_stdout"), "utf8")).resolves.toBe("   \n");
+      const diffCommand = JSON.parse(await readFile(path.join(root, "debug", "loom.diff_command.json"), "utf8")) as {
+        command: string[];
+      };
+      expect(diffCommand.command).toEqual(["git", "diff", "--", "src"]);
     });
 
     it("includes signal metadata in failed Pi command errors", async () => {

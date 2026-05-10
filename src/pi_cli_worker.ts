@@ -42,7 +42,8 @@ export class PiCliWorkerAdapter implements WorkerAdapter {
     const piResult = await this.shell.run(piCommand, input.state.repoPath, timeoutSeconds, this.config.env);
 
     if (!piResult.ok) {
-      throw new RuntimeError(formatCommandFailure("pi command failed", piCommand, piResult));
+      const debugDir = await writePiDebugArtifacts(input, piCommand, piResult);
+      throw new RuntimeError(`${formatCommandFailure("pi command failed", piCommand, piResult)}\ndebug: ${debugDir}`);
     }
 
     const diffCommand = this.config.diffCommand ?? ["git", "diff", "--", "src"];
@@ -51,11 +52,13 @@ export class PiCliWorkerAdapter implements WorkerAdapter {
 
     const diffResult = await this.shell.run(diffCommand, input.state.repoPath, timeoutSeconds);
     if (!diffResult.ok) {
-      throw new RuntimeError(formatCommandFailure("pi diff command failed", diffCommand, diffResult));
+      const debugDir = await writePiDebugArtifacts(input, piCommand, piResult, diffCommand, diffResult);
+      throw new RuntimeError(`${formatCommandFailure("pi diff command failed", diffCommand, diffResult)}\ndebug: ${debugDir}`);
     }
 
     if (!diffResult.stdout.trim()) {
-      throw new RuntimeError("empty git diff");
+      const debugDir = await writePiDebugArtifacts(input, piCommand, piResult, diffCommand, diffResult);
+      throw new RuntimeError(`empty git diff\ndebug: ${debugDir}`);
     }
 
     await artifacts.writeText("CandidatePatch", diffResult.stdout);
@@ -83,6 +86,57 @@ export class PiCliWorkerAdapter implements WorkerAdapter {
     rejectDestructiveGitCommand(result, "pi command");
     return result;
   }
+}
+
+async function writePiDebugArtifacts(
+  input: WorkerInput,
+  piCommand: string[],
+  piResult: AdapterResult,
+  diffCommand?: string[],
+  diffResult?: AdapterResult
+): Promise<string> {
+  const debugDir = path.join(input.state.runRoot, "debug");
+  await mkdir(debugDir, { recursive: true });
+
+  await writeFile(
+    path.join(debugDir, "pi.command.json"),
+    `${JSON.stringify(
+      {
+        command: piCommand,
+        cwd: input.state.repoPath,
+        stageName: input.stageName,
+        runId: input.state.runId
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  await writeFile(path.join(debugDir, "pi.stdout"), piResult.stdout, "utf8");
+  await writeFile(path.join(debugDir, "pi.stderr"), piResult.stderr, "utf8");
+  await writeFile(path.join(debugDir, "pi.result.json"), `${JSON.stringify(piResult, null, 2)}\n`, "utf8");
+
+  if (diffCommand && diffResult) {
+    await writeFile(
+      path.join(debugDir, "pi.diff_command.json"),
+      `${JSON.stringify(
+        {
+          command: diffCommand,
+          cwd: input.state.repoPath,
+          stageName: input.stageName,
+          runId: input.state.runId
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    await writeFile(path.join(debugDir, "pi.diff_stdout"), diffResult.stdout, "utf8");
+    await writeFile(path.join(debugDir, "pi.diff_stderr"), diffResult.stderr, "utf8");
+    await writeFile(path.join(debugDir, "pi.diff_result.json"), `${JSON.stringify(diffResult, null, 2)}\n`, "utf8");
+  }
+
+  return debugDir;
 }
 
 function buildPiPrompt(input: WorkerInput): string {

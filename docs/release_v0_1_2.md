@@ -63,6 +63,7 @@ The Pi tests use fake shell implementations to verify:
 - optional environment handling
 - diff command execution
 - `CandidatePatch` creation from diff stdout
+- debug artifact writing on Pi command or diff-capture failure
 - empty diff failure
 - failed Pi command failure
 - failed diff command failure
@@ -85,7 +86,7 @@ pnpm run:local-cli-demo
 
 No real Pi command is required for this release.
 
-Only add real Pi manual verification after a guarded real Pi demo exists.
+The guarded real Pi demo is optional. It uses JSON print mode for better event visibility and writes process diagnostics to `runs/<runId>/debug/` if the Pi command fails or NLAH cannot capture a diff.
 
 ## Future
 

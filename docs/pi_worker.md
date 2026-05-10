@@ -93,6 +93,30 @@ Refusing to run real Pi. Set NLAH_RUN_REAL_PI=1 to run this demo.
 
 After the guard is set, the demo runs a preflight check with `pi --version`. If Pi is unavailable, it exits before `runHarness` starts.
 
+The manual demo uses JSON print mode:
+
+```text
+pi -p --mode json @<promptPath>
+```
+
+Pi `print-mode.ts` sends the initial prompt, prints JSON session events in JSON mode, then disposes the session after prompts complete. Using JSON mode makes the real manual path more diagnosable than final-text-only output when a provider, tool, or session step stalls.
+
+If the Pi command fails, times out, or exits without a captured diff, the adapter writes debug artifacts under:
+
+```text
+runs/<runId>/debug/
+- pi.command.json
+- pi.stdout
+- pi.stderr
+- pi.result.json
+- pi.diff_command.json
+- pi.diff_stdout
+- pi.diff_stderr
+- pi.diff_result.json
+```
+
+The `pi.diff_*` files are written only after the Pi command exits and NLAH attempts to capture `git diff`. Command failure messages include the debug directory path.
+
 ## Artifact Flow
 
 Pi edits repo files.

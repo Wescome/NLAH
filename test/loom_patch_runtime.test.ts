@@ -4,7 +4,7 @@ import YAML from "yaml";
 import { describe, expect, it } from "vitest";
 import type { AdapterEnv, AdapterResult } from "../src/adapters.js";
 import { runHarness } from "../src/runtime.js";
-import { createPiPatchDemoRegistry, runPiPatchDemo } from "../examples/pi_patch_demo.js";
+import { createLoomPatchDemoRegistry, runLoomPatchDemo } from "../examples/loom_patch_demo.js";
 import { createTargetRepo, tempDir } from "./helpers.js";
 
 const mathPatch = [
@@ -59,7 +59,7 @@ function ok(stdout: string): AdapterResult {
   };
 }
 
-async function writePiPatchHarness(root: string): Promise<string> {
+async function writeLoomPatchHarness(root: string): Promise<string> {
   const harnessRoot = path.join(root, "harnesses");
   await mkdir(harnessRoot, { recursive: true });
   await cp(path.resolve("roles"), path.join(root, "roles"), { recursive: true });
@@ -71,55 +71,55 @@ async function writePiPatchHarness(root: string): Promise<string> {
       };
     };
   };
-  source.stages.PATCH.worker = "pi";
+  source.stages.PATCH.worker = "loom";
 
-  const harnessPath = path.join(harnessRoot, "crew.pi_patch.yaml");
+  const harnessPath = path.join(harnessRoot, "crew.loom_patch.yaml");
   await writeFile(harnessPath, YAML.stringify(source), "utf8");
   return harnessPath;
 }
 
-describe("pi PATCH runtime demo", () => {
-  it("refuses the manual demo when NLAH_RUN_REAL_PI is not set", async () => {
-    const previousEnv = process.env.NLAH_RUN_REAL_PI;
+describe("loom PATCH runtime demo", () => {
+  it("refuses the manual demo when NLAH_RUN_REAL_LOOM is not set", async () => {
+    const previousEnv = process.env.NLAH_RUN_REAL_LOOM;
     const previousExitCode = process.exitCode;
     const previousError = console.error;
     const messages: string[] = [];
 
-    delete process.env.NLAH_RUN_REAL_PI;
+    delete process.env.NLAH_RUN_REAL_LOOM;
     console.error = (...args: unknown[]) => {
       messages.push(args.map(String).join(" "));
     };
 
     try {
-      await runPiPatchDemo();
+      await runLoomPatchDemo();
 
       expect(process.exitCode).toBe(1);
-      expect(messages.join("\n")).toContain("Refusing to run real Pi. Set NLAH_RUN_REAL_PI=1 to run this demo.");
+      expect(messages.join("\n")).toContain("Refusing to run real Loom. Set NLAH_RUN_REAL_LOOM=1 to run this demo.");
     } finally {
       if (previousEnv === undefined) {
-        delete process.env.NLAH_RUN_REAL_PI;
+        delete process.env.NLAH_RUN_REAL_LOOM;
       } else {
-        process.env.NLAH_RUN_REAL_PI = previousEnv;
+        process.env.NLAH_RUN_REAL_LOOM = previousEnv;
       }
       process.exitCode = previousExitCode;
       console.error = previousError;
     }
   });
 
-  it("executes PATCH through PiCliWorkerAdapter while other stages use deterministic workers", async () => {
-    const root = await tempDir("nlah-pi-patch-runtime-");
+  it("executes PATCH through LoomCliWorkerAdapter while other stages use deterministic workers", async () => {
+    const root = await tempDir("nlah-loom-patch-runtime-");
     const repo = await createTargetRepo(root);
     const taskPath = path.join(root, "TASK.md");
     await cp(path.resolve("examples/TASK.md"), taskPath);
-    const harnessPath = await writePiPatchHarness(root);
-    const fakeShell = new FakeShell([ok("pi PATCH complete"), ok(mathPatch)]);
-    const workerRegistry = createPiPatchDemoRegistry(fakeShell);
+    const harnessPath = await writeLoomPatchHarness(root);
+    const fakeShell = new FakeShell([ok("loom PATCH complete"), ok(mathPatch)]);
+    const workerRegistry = createLoomPatchDemoRegistry(fakeShell);
     const cwd = process.cwd();
 
     process.chdir(root);
     try {
       const result = await runHarness(harnessPath, repo, taskPath, {
-        runId: "pi-patch-runtime-test",
+        runId: "loom-patch-runtime-test",
         workerRegistry
       });
 
@@ -136,9 +136,11 @@ describe("pi PATCH runtime demo", () => {
         .map((line) => JSON.parse(line) as { event: string; stage?: string });
       expect(traceEvents).toContainEqual(expect.objectContaining({ event: "worker_completed", stage: "PATCH" }));
 
-      const promptPath = path.join(result.runRoot, "worker_prompts", "PATCH.pi.md");
+      const promptPath = path.join(result.runRoot, "worker_prompts", "PATCH.loom.md");
       await expect(stat(promptPath)).resolves.toBeTruthy();
       const prompt = await readFile(promptPath, "utf8");
+      expect(prompt).toContain("# NLAH Loom Stage Prompt");
+      expect(prompt).toContain("## Domain\ncode");
       expect(prompt).toContain("### IssueContract");
       expect(prompt).toContain("### RepoMap");
 

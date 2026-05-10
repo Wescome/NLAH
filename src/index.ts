@@ -15,6 +15,7 @@ export * from "./script_worker.js";
 export * from "./local_cli_coding_worker.js";
 export * from "./aider_cli_worker.js";
 export * from "./pi_cli_worker.js";
+export * from "./loom_cli_worker.js";
 export * from "./aider_preflight.js";
 export * from "./pi_preflight.js";
 export * from "./worker_registry.js";

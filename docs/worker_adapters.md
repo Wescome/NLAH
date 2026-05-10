@@ -12,6 +12,7 @@ NLAH workers are execution substrates behind the crew runtime. They receive `Wor
 | `LocalCliCodingWorkerAdapter` | Generic seam for local coding CLI tools. | Only the configured local command. | Yes | Command writes outputs, usually through `outputArtifactPaths`. | Future Aider, Codex CLI, Claude Code, OpenHands, or custom local tool wiring. | Generic command wrapper; does not build prompts or capture diffs by itself. |
 | `LlmWorkerAdapter` | Provider-neutral model boundary with an injected provider. | No default dependency; provider is injected. | Yes | Yes, writes returned artifact content through `ArtifactManager`. | Mock LLM tests and future model-provider adapters. | No provider SDKs included; no external calls by default. |
 | `AiderCliWorkerAdapter` | Aider-specific PATCH-stage adapter that writes a prompt, invokes Aider, captures git diff, and writes `CandidatePatch`. | Yes for manual use: local Aider binary. No for tests. | Yes | Yes, writes `CandidatePatch`. | First external coding-tool path for PATCH-stage experiments. | v1 supports only `CandidatePatch`; tests use fake shell; manual demo is guarded. |
+| `LoomCliWorkerAdapter` | Domain-aware CLI worker that uses Pi as the current command substrate and writes Loom-named prompts/debug artifacts. | Yes for manual use: local Pi binary. No for tests. | Yes | Yes, writes the configured single artifact from captured diff. | Preferred NLAH name for domain-specific PATCH-stage CLI experiments. | v1 is intended for patch-like outputs; tests use fake shell; manual demo is guarded. |
 
 ## Worker Hierarchy
 
@@ -24,6 +25,8 @@ NLAH workers are execution substrates behind the crew runtime. They receive `Wor
 `LlmWorkerAdapter` is the provider-neutral model boundary. It defines the request and response shape for future model-backed workers while keeping provider SDKs outside the runtime.
 
 `AiderCliWorkerAdapter` is the first external coding-tool specialization. It builds on the same worker contract but adds Aider-specific prompt generation and diff capture for the `PATCH` stage.
+
+`LoomCliWorkerAdapter` is the preferred NLAH-facing name for the Pi-backed domain worker path. It adds domain prompt sections and Loom-named debug artifacts while keeping Pi as an interchangeable CLI substrate.
 
 ## Recommended Path
 
@@ -45,6 +48,12 @@ Use the Aider PATCH demo as the first external-tool path. Automated tests use a 
 
 ```bash
 NLAH_RUN_REAL_AIDER=1 pnpm run:aider-patch-demo
+```
+
+Use the Loom PATCH demo as the preferred Pi-backed domain-worker path. Automated tests use a fake shell. Manual runs require local Pi and explicit opt-in:
+
+```bash
+NLAH_RUN_REAL_LOOM=1 pnpm run:loom-patch-demo
 ```
 
 Future worker work should either expand Aider beyond `PATCH` or add specialized adapters for Codex CLI, Claude Code, OpenHands, or other local coding tools.
