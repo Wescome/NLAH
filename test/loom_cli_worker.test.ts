@@ -361,7 +361,7 @@ describe("LoomCliWorkerAdapter", () => {
 
       await worker.execute(input, artifacts);
 
-      expect(shell.calls[1]?.command).toEqual(["git", "diff", "--", "src"]);
+      expect(shell.calls[1]?.command).toEqual(["git", "diff", "--relative", "--", "src"]);
     });
   });
 
@@ -477,7 +477,7 @@ describe("LoomCliWorkerAdapter", () => {
       const diffCommand = JSON.parse(await readFile(path.join(root, "debug", "loom.diff_command.json"), "utf8")) as {
         command: string[];
       };
-      expect(diffCommand.command).toEqual(["git", "diff", "--", "src"]);
+      expect(diffCommand.command).toEqual(["git", "diff", "--relative", "--", "src"]);
     });
 
     it("includes signal metadata in failed Pi command errors", async () => {

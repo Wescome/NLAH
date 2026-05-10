@@ -42,7 +42,7 @@ export class AiderCliWorkerAdapter implements WorkerAdapter {
       throw new RuntimeError(formatCommandFailure("aider command failed", command, aiderResult));
     }
 
-    const diffCommand = this.config.diffCommand ?? ["git", "diff", "--", "src"];
+    const diffCommand = this.config.diffCommand ?? ["git", "diff", "--relative", "--", "src"];
     validateCommand(diffCommand, "diff command");
     rejectDestructiveGitCommand(diffCommand, "diff command");
 

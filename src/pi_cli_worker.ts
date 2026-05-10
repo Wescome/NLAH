@@ -46,7 +46,7 @@ export class PiCliWorkerAdapter implements WorkerAdapter {
       throw new RuntimeError(`${formatCommandFailure("pi command failed", piCommand, piResult)}\ndebug: ${debugDir}`);
     }
 
-    const diffCommand = this.config.diffCommand ?? ["git", "diff", "--", "src"];
+    const diffCommand = this.config.diffCommand ?? ["git", "diff", "--relative", "--", "src"];
     validateCommand(diffCommand, "diff command");
     rejectDestructiveGitCommand(diffCommand, "diff command");
 

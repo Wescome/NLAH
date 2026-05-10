@@ -12,9 +12,13 @@ import { WorkerRegistry } from "../src/worker_registry.js";
 
 type ShellRunner = Pick<ShellAdapter, "run">;
 
-export function createPiPatchDemoRegistry(shell?: ShellRunner): WorkerRegistry {
+export type PiPatchDemoRegistryOptions = {
+  piAgentDir?: string;
+};
+
+export function createPiPatchDemoRegistry(shell?: ShellRunner, options: PiPatchDemoRegistryOptions = {}): WorkerRegistry {
   const deterministicWorker = new DeterministicWorkerAdapter();
-  const model = process.env.NLAH_PI_MODEL ?? "openai/gpt-4o-mini";
+  const model = process.env.NLAH_PI_MODEL ?? (process.env.OFOX_API_KEY ? "ofox/openai/gpt-5.4" : "openai/gpt-4o-mini");
   const apiKeyArgs = buildApiKeyArgs();
   const piWorker = new PiCliWorkerAdapter(
     {
@@ -29,7 +33,10 @@ export function createPiPatchDemoRegistry(shell?: ShellRunner): WorkerRegistry {
         "--tools",
         "read,edit,write,grep,find,ls"
       ],
-      env: sanitizedCredentialEnv(),
+      env: {
+        ...sanitizedCredentialEnv(),
+        ...(options.piAgentDir ? { PI_CODING_AGENT_DIR: options.piAgentDir } : {})
+      },
       timeoutSeconds: 300
     },
     shell
@@ -47,6 +54,53 @@ export function createPiPatchDemoRegistry(shell?: ShellRunner): WorkerRegistry {
 function buildApiKeyArgs(): string[] {
   const apiKey = process.env.NLAH_PI_API_KEY ?? process.env.OFOX_API_KEY;
   return apiKey ? ["--api-key", sanitizeCredentialValue(apiKey)] : [];
+}
+
+async function prepareOfoxPiAgentDir(agentDir: string): Promise<string | undefined> {
+  if (!process.env.OFOX_API_KEY) {
+    return undefined;
+  }
+
+  await mkdir(agentDir, { recursive: true });
+  await writeFile(
+    path.join(agentDir, "models.json"),
+    `${JSON.stringify(
+      {
+        providers: {
+          ofox: {
+            baseUrl: "https://api.ofox.ai/v1",
+            api: "openai-completions",
+            apiKey: "OFOX_API_KEY",
+            compat: {
+              supportsDeveloperRole: false,
+              supportsReasoningEffort: false,
+              maxTokensField: "max_tokens"
+            },
+            models: [
+              {
+                id: "openai/gpt-5.4",
+                name: "OFOX GPT-5.4",
+                reasoning: false,
+                input: ["text"],
+                contextWindow: 128000,
+                maxTokens: 16384,
+                cost: {
+                  input: 0,
+                  output: 0,
+                  cacheRead: 0,
+                  cacheWrite: 0
+                }
+              }
+            ]
+          }
+        }
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
+  return agentDir;
 }
 
 async function writePiPatchHarness(sourcePath: string, targetPath: string): Promise<void> {
@@ -92,10 +146,11 @@ export async function runPiPatchDemo(): Promise<void> {
 
   const harnessPath = path.resolve("runs", "pi-patch-demo-harness", "harnesses", "crew.pi_patch.yaml");
   await writePiPatchHarness("harnesses/crew.mvp.yaml", harnessPath);
+  const piAgentDir = await prepareOfoxPiAgentDir(path.resolve("runs", "pi-patch-demo-pi-agent"));
 
   const result = await runHarness(harnessPath, "examples/target_repo_stub", "examples/TASK.md", {
     runId: "pi-patch-demo",
-    workerRegistry: createPiPatchDemoRegistry(),
+    workerRegistry: createPiPatchDemoRegistry(undefined, piAgentDir ? { piAgentDir } : {}),
     overwriteRun: true
   });
   console.log(JSON.stringify(result, null, 2));

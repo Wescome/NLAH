@@ -363,7 +363,7 @@ describe("PiCliWorkerAdapter", () => {
     const diffCommand = JSON.parse(await readFile(path.join(root, "debug", "pi.diff_command.json"), "utf8")) as {
       command: string[];
     };
-    expect(diffCommand.command).toEqual(["git", "diff", "--", "src"]);
+    expect(diffCommand.command).toEqual(["git", "diff", "--relative", "--", "src"]);
   });
 
   it("includes signal metadata in failed Pi command errors", async () => {
