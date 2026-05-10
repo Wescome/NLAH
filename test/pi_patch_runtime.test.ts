@@ -4,7 +4,7 @@ import YAML from "yaml";
 import { describe, expect, it } from "vitest";
 import type { AdapterEnv, AdapterResult } from "../src/adapters.js";
 import { runHarness } from "../src/runtime.js";
-import { createPiPatchDemoRegistry } from "../examples/pi_patch_demo.js";
+import { createPiPatchDemoRegistry, runPiPatchDemo } from "../examples/pi_patch_demo.js";
 import { createTargetRepo, tempDir } from "./helpers.js";
 
 const mathPatch = [
@@ -79,6 +79,33 @@ async function writePiPatchHarness(root: string): Promise<string> {
 }
 
 describe("pi PATCH runtime demo", () => {
+  it("refuses the manual demo when NLAH_RUN_REAL_PI is not set", async () => {
+    const previousEnv = process.env.NLAH_RUN_REAL_PI;
+    const previousExitCode = process.exitCode;
+    const previousError = console.error;
+    const messages: string[] = [];
+
+    delete process.env.NLAH_RUN_REAL_PI;
+    console.error = (...args: unknown[]) => {
+      messages.push(args.map(String).join(" "));
+    };
+
+    try {
+      await runPiPatchDemo();
+
+      expect(process.exitCode).toBe(1);
+      expect(messages.join("\n")).toContain("Refusing to run real Pi. Set NLAH_RUN_REAL_PI=1 to run this demo.");
+    } finally {
+      if (previousEnv === undefined) {
+        delete process.env.NLAH_RUN_REAL_PI;
+      } else {
+        process.env.NLAH_RUN_REAL_PI = previousEnv;
+      }
+      process.exitCode = previousExitCode;
+      console.error = previousError;
+    }
+  });
+
   it("executes PATCH through PiCliWorkerAdapter while other stages use deterministic workers", async () => {
     const root = await tempDir("nlah-pi-patch-runtime-");
     const repo = await createTargetRepo(root);

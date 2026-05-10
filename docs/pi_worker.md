@@ -70,12 +70,20 @@ Extra args are appended to the configured command array. Commands are executed t
 The optional runtime demo wires `PiCliWorkerAdapter` into the PATCH stage while all other stages use `DeterministicWorkerAdapter`:
 
 ```bash
-pnpm run:pi-patch-demo
+NLAH_RUN_REAL_PI=1 pnpm run:pi-patch-demo
 ```
 
 The demo creates a temporary harness variant from `harnesses/crew.mvp.yaml` where `PATCH.worker = "pi"`. It does not permanently change the canonical crew harness.
 
-Automated tests use a fake shell and do not invoke real Pi. Manual use requires Pi to be installed separately.
+Automated tests use a fake shell and do not invoke real Pi. Manual use requires Pi to be installed separately and verified with `pi --version`.
+
+The runtime demo is guarded. Without `NLAH_RUN_REAL_PI=1`, it prints:
+
+```text
+Refusing to run real Pi. Set NLAH_RUN_REAL_PI=1 to run this demo.
+```
+
+After the guard is set, the demo runs a preflight check with `pi --version`. If Pi is unavailable, it exits before `runHarness` starts.
 
 ## Artifact Flow
 
@@ -101,7 +109,7 @@ The adapter preserves the current worker safety model:
 - optional env support
 - NLAH remains responsible for gates and trace
 
-Real Pi execution is optional and should be guarded in any future demo script. Automated tests must use fake-shell execution and must not require Pi to be installed.
+Real Pi execution is optional and guarded. Automated tests must use fake-shell execution and must not require Pi to be installed.
 
 ## Future
 

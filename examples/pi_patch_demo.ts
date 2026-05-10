@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import type { ShellAdapter } from "../src/adapters.js";
 import { PiCliWorkerAdapter } from "../src/pi_cli_worker.js";
+import { checkPiAvailable } from "../src/pi_preflight.js";
 import { runHarness } from "../src/runtime.js";
 import { DeterministicWorkerAdapter } from "../src/workers.js";
 import { WorkerRegistry } from "../src/worker_registry.js";
@@ -50,6 +51,25 @@ async function writePiPatchHarness(sourcePath: string, targetPath: string): Prom
 }
 
 export async function runPiPatchDemo(): Promise<void> {
+  if (process.env.NLAH_RUN_REAL_PI !== "1") {
+    console.error("Refusing to run real Pi. Set NLAH_RUN_REAL_PI=1 to run this demo.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const preflight = await checkPiAvailable();
+  if (!preflight.ok) {
+    console.error(
+      [
+        `Pi CLI is not available: ${preflight.message}`,
+        "Install Pi manually, then verify it:",
+        "pi --version"
+      ].join("\n")
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   const harnessPath = path.resolve("runs", "pi-patch-demo-harness", "harnesses", "crew.pi_patch.yaml");
   await writePiPatchHarness("harnesses/crew.mvp.yaml", harnessPath);
 

@@ -145,10 +145,10 @@ Worker adapter matrix: [docs/worker_adapters.md](docs/worker_adapters.md).
 The optional Pi PATCH demo wires Pi into the PATCH stage while deterministic workers handle the other stages:
 
 ```bash
-pnpm run:pi-patch-demo
+NLAH_RUN_REAL_PI=1 pnpm run:pi-patch-demo
 ```
 
-Manual use requires Pi to be installed separately. Automated verification does not require real Pi.
+Manual use requires Pi to be installed separately and verified with `pi --version`. Without `NLAH_RUN_REAL_PI=1`, the script refuses to run. Automated verification does not require real Pi.
 
 Manual Aider demo runs are guarded because they invoke real local Aider. Aider is not installed by this repo; install and verify it manually first:
 

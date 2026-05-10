@@ -42,10 +42,12 @@ The canonical `harnesses/crew.mvp.yaml` is not permanently changed. The demo cre
 Package script:
 
 ```bash
-pnpm run:pi-patch-demo
+NLAH_RUN_REAL_PI=1 pnpm run:pi-patch-demo
 ```
 
 This script is optional. It may require real Pi if run manually, but automated verification does not require real Pi.
+
+Without `NLAH_RUN_REAL_PI=1`, the script refuses to run. When the guard is set, the script checks `pi --version` before starting the runtime.
 
 ## Fake-Shell Test Strategy
 
