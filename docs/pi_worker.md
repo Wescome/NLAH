@@ -1,129 +1,106 @@
-# Pi Worker Design v1
+# Pi CLI Worker
+
+## Purpose
+
+`PiCliWorkerAdapter` integrates Pi as a NLAH worker substrate.
+
+Pi is a terminal coding harness that can execute local coding work behind the NLAH worker contract. The adapter is designed to let Pi produce repository changes while NLAH captures artifacts, evaluates gates, records traces, and writes summaries.
 
 ## Positioning
 
-NLAH remains the crew runtime and control plane.
+NLAH remains the crew runtime.
 
-Pi is a terminal coding harness substrate. It can execute coding work, but it must not own NLAH crew semantics, stage graph construction, artifact contracts, gate evaluation, trace records, or run summaries.
+Pi is a terminal coding harness worker. Pi must not own crew semantics, stage graph construction, artifact contracts, gate evaluation, trace records, or summaries.
 
-The boundary should remain:
+The boundary is:
 
 ```text
-NLAH crew runtime
+NLAH Crew Runtime
 -> WorkerInput + StageContext
--> Pi worker adapter
--> local Pi execution
--> declared artifacts
--> NLAH gates, trace, and summary
+-> PiCliWorkerAdapter
+-> local Pi command
+-> repo changes / command output
+-> CandidatePatch artifact
+-> NLAH gates and trace
 ```
 
 ## Why Pi Fits
 
-Pi is a strong candidate worker substrate because it is a minimal terminal coding harness with multiple integration surfaces.
+Pi fits the NLAH worker model because it is:
 
-Relevant fit:
+- a minimal terminal coding harness
+- customizable with extensions, skills, prompt templates, and packages
+- available through interactive, print/JSON, RPC, and SDK modes
+- flexible across providers and models
+- built around context engineering support through `AGENTS.md`, `SYSTEM.md`, compaction, skills, prompt templates, and dynamic context
 
-- minimal terminal coding harness
-- customizable extensions, skills, prompt templates, and packages
-- four modes: interactive, print/JSON, RPC, SDK
-- provider and model flexibility
-- context engineering through `AGENTS.md`, `SYSTEM.md`, compaction, skills, and dynamic context
+Those features make Pi a useful execution substrate while leaving orchestration semantics in NLAH.
 
-Those properties align with NLAH's worker model. NLAH can provide the structured stage packet and artifact contract, while Pi handles local coding-tool execution under that contract.
+## v1 Scope
 
-## First Integration Path
+The v1 adapter scope is intentionally narrow:
 
-Start with `PiCliWorkerAdapter`.
+- CLI only
+- print/json mode only
+- `CandidatePatch` only
+- fake-shell tests only
+- no package dependency
+- no real Pi invocation in CI
 
-Reasons:
+The adapter supports PATCH-stage experiments first. Other stages can remain deterministic, command-backed, script-backed, local-CLI-backed, or mock-backed until Pi behavior is proven at the worker boundary.
 
-- fastest fit with the existing `ShellAdapter`
-- works with fake-shell tests
-- can use print/JSON mode for non-interactive execution
-- no Pi dependency required in this repository
-- consistent with the existing Aider adapter pattern
+## Command Shape
 
-The first implementation should be PATCH-only, matching the current external-tool adapter shape. Other stages can remain deterministic, command-backed, script-backed, or mock-backed until Pi behavior is proven at the worker boundary.
+Print mode:
 
-## Later Integration Paths
-
-After the CLI adapter is stable, later paths can add deeper integration:
-
-- `PiRpcWorkerAdapter`
-- `PiSdkWorkerAdapter`
-- `PiExtensionPackage` for NLAH-specific crew execution
-
-These should remain optional layers. The crew harness, runtime state machine, artifact manager, gates, trace ledger, and summary writer stay in NLAH.
-
-## Proposed `PiCliWorkerAdapter` Behavior
-
-For v1, `PiCliWorkerAdapter` should:
-
-1. Receive `WorkerInput`.
-2. Write a stage prompt under `runs/<runId>/worker_prompts/<stageName>.md`.
-3. Invoke the configured Pi command through `ShellAdapter`.
-4. Support print/JSON mode for non-interactive execution.
-5. Capture `git diff` after Pi exits.
-6. Write `CandidatePatch` for PATCH v1.
-7. Return declared artifact names in `WorkerOutput.createdArtifacts`.
-8. Let NLAH artifact validation and gates decide whether the stage completed.
-
-The adapter must not treat Pi stdout or model text as proof of completion. Completion still requires declared artifacts and passing gates.
-
-## Config Sketch
-
-```ts
-export type PiCliWorkerConfig = {
-  command?: string; // default "pi"
-  mode?: "print" | "json";
-  extraArgs?: string[];
-  timeoutSeconds?: number;
-  diffCommand?: string[];
-};
+```text
+pi -p <promptPath>
 ```
 
-Expected defaults:
+JSON mode:
 
-- `command`: `"pi"`
-- `mode`: `"json"` if the local Pi command supports it cleanly, otherwise `"print"`
-- `timeoutSeconds`: explicit finite default
-- `diffCommand`: `["git", "diff", "--", "src"]`
+```text
+pi -p <promptPath> --mode json
+```
+
+Extra args are appended to the configured command array. Commands are executed through `ShellAdapter` with `cwd = repoPath`.
+
+## Artifact Flow
+
+Pi edits repo files.
+
+NLAH captures `git diff`.
+
+NLAH writes `CandidatePatch`.
+
+NLAH gates verify patch application and release correctness.
+
+The adapter does not treat Pi stdout or model text as proof of completion. Stage completion still requires declared artifacts and passing gates.
 
 ## Safety
 
-The adapter must preserve the current worker safety model:
+The adapter preserves the current worker safety model:
 
 - no `shell=true`
 - command arrays only
-- no commit or push by default
+- no commit/push
+- no destructive git operations
 - timeout required
-- fake-shell tests only for CI
-- real Pi run optional and guarded
+- optional env support
+- NLAH remains responsible for gates and trace
 
-The adapter should reject destructive git commands in configured command arrays and diff commands. Generated prompts should be stored under the run directory for auditability.
+Real Pi execution is optional and should be guarded in any future demo script. Automated tests must use fake-shell execution and must not require Pi to be installed.
 
-## Test Plan
+## Future
 
-The first implementation should not invoke real Pi in tests.
+Later integration paths:
 
-Tests should verify:
+- `PiRpcWorkerAdapter`
+- `PiSdkWorkerAdapter`
+- NLAH-specific Pi extension package
+- Pi package containing NLAH skills/prompts
 
-- prompt file is written
-- prompt includes task text, role text, input artifacts, and declared outputs
-- command array includes the configured Pi command and mode
-- fake shell receives cwd as `repoPath`
-- diff command runs after Pi command
-- non-empty diff writes `CandidatePatch`
-- empty diff fails
-- failed Pi command fails
-- failed diff command fails
-- unsupported declared outputs fail for PATCH v1
-
-## Next Implementation Packet
-
-```text
-feat: add pi cli worker adapter
-```
+These should remain optional worker layers. The crew harness, runtime state machine, artifact manager, gates, trace ledger, and summary writer stay in NLAH.
 
 ## Verification
 
