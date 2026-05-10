@@ -36,7 +36,11 @@ Current capabilities:
 - worker registry and stage worker binding support
 - provider-neutral LLM worker interface with local mock demo only
 
-Release checklist: [NLAH v0.1.0 — Crew Runtime Foundation](docs/release_v0_1_0.md).
+Release notes:
+
+- [NLAH v0.1.0 — Crew Runtime Foundation](docs/release_v0_1_0.md)
+- [NLAH v0.1.1 — Worker Adapter Documentation and Aider Path](docs/release_v0_1_1.md)
+- [NLAH v0.1.2 — Pi CLI Worker Path](docs/release_v0_1_2.md)
 
 ## Install
 
