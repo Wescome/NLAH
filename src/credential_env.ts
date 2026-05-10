@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import type { AdapterEnv } from "./adapters.js";
 
 const credentialEnvNames = [
@@ -20,11 +21,51 @@ const credentialEnvNames = [
   "AWS_BEARER_TOKEN_BEDROCK"
 ];
 
+const credentialEnvNameSet = new Set(credentialEnvNames);
+
 export function sanitizeCredentialValue(value: string): string {
   return value
     .trim()
     .replace(/^[\u2018\u2019\u201C\u201D'"]+/, "")
     .replace(/[\u2018\u2019\u201C\u201D'"]+$/, "");
+}
+
+export async function loadLocalCredentialEnv(
+  filePath = ".env.local",
+  target: NodeJS.ProcessEnv = process.env
+): Promise<string[]> {
+  let content: string;
+  try {
+    content = await readFile(filePath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+
+  const loaded: string[] = [];
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+
+    const equalsIndex = line.indexOf("=");
+    if (equalsIndex <= 0) {
+      continue;
+    }
+
+    const name = line.slice(0, equalsIndex).trim();
+    if (!credentialEnvNameSet.has(name) || target[name] !== undefined) {
+      continue;
+    }
+
+    target[name] = sanitizeCredentialValue(line.slice(equalsIndex + 1).trim());
+    loaded.push(name);
+  }
+
+  return loaded;
 }
 
 export function sanitizedCredentialEnv(source: NodeJS.ProcessEnv = process.env): AdapterEnv {

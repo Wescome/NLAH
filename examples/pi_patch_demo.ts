@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import type { ShellAdapter } from "../src/adapters.js";
-import { sanitizedCredentialEnv, sanitizeCredentialValue } from "../src/credential_env.js";
+import { loadLocalCredentialEnv, sanitizedCredentialEnv, sanitizeCredentialValue } from "../src/credential_env.js";
 import { PiCliWorkerAdapter } from "../src/pi_cli_worker.js";
 import { checkPiAvailable } from "../src/pi_preflight.js";
 import { runHarness } from "../src/runtime.js";
@@ -74,6 +74,8 @@ export async function runPiPatchDemo(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+
+  await loadLocalCredentialEnv();
 
   const preflight = await checkPiAvailable();
   if (!preflight.ok) {
