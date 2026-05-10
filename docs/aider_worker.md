@@ -157,7 +157,7 @@ Repo-map: disabled
 OpenAIException - 'ascii' codec can't encode character '\u201c'
 ```
 
-This is recorded as a known external-tool issue in the local Aider/LiteLLM/OpenAI path. The NLAH adapter path remains covered by fake-shell tests, which are the supported CI verification path for this external-tool integration until the upstream/runtime encoding issue is resolved.
+This is recorded as a known external-tool issue in the local Aider/LiteLLM/OpenAI path. See [known_external_failures.md](known_external_failures.md). The NLAH adapter path remains covered by fake-shell tests, which are the supported CI verification path for this external-tool integration until the upstream/runtime encoding issue is resolved.
 
 After `NLAH_RUN_REAL_AIDER=1` is set, the demo runs a preflight check with `aider --version`. If Aider is unavailable, it prints install guidance and exits before `runHarness` starts.
 
