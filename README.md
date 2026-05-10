@@ -136,6 +136,8 @@ Worker adapter matrix: [docs/worker_adapters.md](docs/worker_adapters.md).
 
 `AiderCliWorkerAdapter`: external coding-tool adapter for PATCH-stage experiments. Aider is not a package dependency, automated tests use a fake shell, and the adapter does not commit or push. See [docs/aider_worker.md](docs/aider_worker.md).
 
+Pi worker design: [docs/pi_worker.md](docs/pi_worker.md) outlines Pi as a potential terminal coding harness substrate. Pi is not a package dependency and is not invoked by tests.
+
 Manual Aider demo runs are guarded because they invoke real local Aider. Aider is not installed by this repo; install and verify it manually first:
 
 ```bash
