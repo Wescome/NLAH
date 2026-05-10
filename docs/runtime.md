@@ -71,6 +71,8 @@ The CLI currently supports `--worker deterministic`. Programmatic callers can re
 
 `pnpm run:aider-patch-demo` wires `AiderCliWorkerAdapter` into the `PATCH` stage while deterministic workers handle the other stages. The automated tests use a fake shell and do not invoke real Aider. The script is optional, requires Aider to be available locally, and refuses to run unless invoked as `NLAH_RUN_REAL_AIDER=1 pnpm run:aider-patch-demo`. The demo config includes `--no-auto-commits`; the adapter does not commit or push.
 
+`PiCliWorkerAdapter` follows the same external-tool pattern for Pi. Command failures include timeout, signal, and process-failure metadata when `ShellAdapter` receives it from the subprocess layer.
+
 ## `WorkerAdapter`
 
 ```ts
@@ -136,6 +138,22 @@ Gates enforce executable contracts after worker execution and artifact checks. C
 - `final_patch_matches_verified_candidate`
 
 `patch_applies_cleanly` runs `git apply --check` through `ShellAdapter` with a `string[]` command, never `shell=true`.
+
+## `ShellAdapter`
+
+`ShellAdapter` runs command arrays through `execa` without `shell=true`.
+
+`AdapterResult` includes command output and process metadata:
+
+- `ok`
+- `returncode`
+- `stdout`
+- `stderr`
+- `timedOut` when the subprocess timed out
+- `signal` when the subprocess reports a termination signal
+- `failed` when the subprocess layer reports command failure metadata
+
+Worker adapters that format command failures should include this metadata so external-tool failures do not collapse into ambiguous `exit: 0` messages.
 
 ## Trace Events
 

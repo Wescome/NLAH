@@ -258,6 +258,38 @@ describe("PiCliWorkerAdapter", () => {
     expect(shell.calls[0]?.command[0]).toBe("pi");
   });
 
+  it("includes timeout metadata in failed Pi command errors", async () => {
+    const { artifacts, input } = await fixture();
+    const shell = new FakeShell([
+      {
+        ok: false,
+        returncode: 1,
+        stdout: "",
+        stderr: "timed out",
+        timedOut: true
+      }
+    ]);
+    const worker = new PiCliWorkerAdapter({}, shell);
+
+    await expect(worker.execute(input, artifacts)).rejects.toThrow("timed out: true");
+  });
+
+  it("includes signal metadata in failed Pi command errors", async () => {
+    const { artifacts, input } = await fixture();
+    const shell = new FakeShell([
+      {
+        ok: false,
+        returncode: 1,
+        stdout: "",
+        stderr: "terminated",
+        signal: "SIGTERM"
+      }
+    ]);
+    const worker = new PiCliWorkerAdapter({}, shell);
+
+    await expect(worker.execute(input, artifacts)).rejects.toThrow("signal: SIGTERM");
+  });
+
   it("throws RuntimeError for a failed diff command", async () => {
     const { artifacts, input } = await fixture();
     const shell = new FakeShell([ok("pi done"), fail("diff failed", 3, "diff stdout")]);

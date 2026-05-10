@@ -152,6 +152,9 @@ function formatCommandFailure(label: string, command: string[], result: AdapterR
     label,
     `command: ${command.join(" ")}`,
     `exit: ${result.returncode}`,
+    result.timedOut ? "timed out: true" : "",
+    result.signal ? `signal: ${result.signal}` : "",
+    result.failed ? "failed: true" : "",
     result.stderr ? `stderr: ${result.stderr}` : "",
     result.stdout ? `stdout: ${result.stdout}` : ""
   ]

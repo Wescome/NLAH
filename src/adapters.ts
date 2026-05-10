@@ -7,6 +7,9 @@ export type AdapterResult = {
   returncode: number;
   stdout: string;
   stderr: string;
+  timedOut?: boolean;
+  signal?: string;
+  failed?: boolean;
 };
 
 export type AdapterEnv = Record<string, string>;
@@ -43,18 +46,42 @@ export class ShellAdapter {
       });
       return {
         ok: result.exitCode === 0,
-        returncode: result.exitCode ?? 0,
+        returncode: result.exitCode ?? 1,
         stdout: result.stdout,
-        stderr: result.stderr
+        stderr: result.stderr,
+        ...optionalAdapterMetadata(result)
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const errorWithMetadata = error as {
+        exitCode?: unknown;
+        stdout?: unknown;
+        stderr?: unknown;
+        message?: unknown;
+        timedOut?: unknown;
+        signal?: unknown;
+      };
+      const stderr = errorWithMetadata.stderr ?? errorWithMetadata.message ?? "";
       return {
         ok: false,
-        returncode: 1,
-        stdout: "",
-        stderr: message
+        returncode: typeof errorWithMetadata.exitCode === "number" ? errorWithMetadata.exitCode : 1,
+        stdout: String(errorWithMetadata.stdout ?? ""),
+        stderr: String(stderr),
+        ...(Boolean(errorWithMetadata.timedOut) ? { timedOut: true } : {}),
+        ...(typeof errorWithMetadata.signal === "string" ? { signal: errorWithMetadata.signal } : {}),
+        failed: true
       };
     }
   }
+}
+
+function optionalAdapterMetadata(result: {
+  timedOut?: unknown;
+  signal?: unknown;
+  failed?: unknown;
+}): Pick<AdapterResult, "timedOut" | "signal" | "failed"> {
+  return {
+    ...(Boolean(result.timedOut) ? { timedOut: true } : {}),
+    ...(typeof result.signal === "string" ? { signal: result.signal } : {}),
+    ...(typeof result.failed === "boolean" ? { failed: result.failed } : {})
+  };
 }

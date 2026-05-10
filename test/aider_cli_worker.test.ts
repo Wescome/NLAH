@@ -262,6 +262,22 @@ describe("AiderCliWorkerAdapter", () => {
     expect(shell.calls).toHaveLength(1);
   });
 
+  it("includes failed metadata in failed aider command errors", async () => {
+    const { artifacts, input } = await fixture();
+    const shell = new FakeShell([
+      {
+        ok: false,
+        returncode: 1,
+        stdout: "",
+        stderr: "aider failed",
+        failed: true
+      }
+    ]);
+    const worker = new AiderCliWorkerAdapter({}, shell);
+
+    await expect(worker.execute(input, artifacts)).rejects.toThrow("failed: true");
+  });
+
   it("throws RuntimeError for a failed diff command", async () => {
     const { artifacts, input } = await fixture();
     const shell = new FakeShell([ok("aider done"), fail("diff failed", 3)]);
