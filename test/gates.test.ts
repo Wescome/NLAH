@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import path from "node:path";
 import { ArtifactManager } from "../src/artifacts.js";
 import { GateError } from "../src/errors.js";
-import { gateRegistry, parseGateExpression } from "../src/gates.js";
+import { evaluateGateSpec, gateRegistry, parseGateExpression } from "../src/gates.js";
 import type { RuntimeState } from "../src/state.js";
 import { createTargetRepo, tempDir, validSpec } from "./helpers.js";
 
@@ -69,5 +69,46 @@ describe("gates", () => {
     await expect(gateRegistry.final_patch_matches_verified_candidate!(state, artifacts, undefined)).resolves.toMatchObject({
       passed: true
     });
+  });
+
+  it("any gate passes when at least one expression passes", async () => {
+    const { artifacts, state } = await fixture();
+    await artifacts.writeText("RepoMap", "content");
+
+    await expect(
+      evaluateGateSpec(
+        {
+          any: [{ exists: "CandidatePatch" }, { exists: "RepoMap" }]
+        },
+        state,
+        artifacts
+      )
+    ).resolves.toEqual([
+      {
+        passed: true,
+        gate: "any",
+        message: "any-gate passed: exists"
+      }
+    ]);
+  });
+
+  it("any gate fails only when no expression passes", async () => {
+    const { artifacts, state } = await fixture();
+
+    await expect(
+      evaluateGateSpec(
+        {
+          any: [{ exists: "CandidatePatch" }, { exists: "RepoMap" }]
+        },
+        state,
+        artifacts
+      )
+    ).resolves.toEqual([
+      {
+        passed: false,
+        gate: "any",
+        message: "no any-gate passed: exists, exists"
+      }
+    ]);
   });
 });

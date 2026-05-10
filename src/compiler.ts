@@ -10,6 +10,7 @@ import {
   assertReachableFrom,
   deterministicStageOrder
 } from "./graph.js";
+import { gateRegistry, parseGateExpression } from "./gates.js";
 
 export type CompiledHarness = {
   spec: HarnessSpec;
@@ -51,6 +52,48 @@ function assertInputArtifactsAvailable(
 
     for (const artifactName of stage.outputs) {
       availableArtifacts.add(artifactName);
+    }
+  }
+}
+
+const gateArtifactArgs = new Set([
+  "exists",
+  "patch_applies_cleanly",
+  "repo_map_names_relevant_files",
+  "repo_map_names_test_entrypoints",
+  "verifier_accepts_patch",
+  "test_results_support_claims"
+]);
+
+function assertGateReferencesValid(spec: HarnessSpec): void {
+  for (const [stageName, stage] of Object.entries(spec.stages)) {
+    const expressions = [...(stage.gate?.all ?? []), ...(stage.gate?.any ?? [])];
+    for (const expression of expressions) {
+      try {
+        const { gateName, args } = parseGateExpression(expression);
+        if (!gateRegistry[gateName]) {
+          throw new CompilerError(`unknown gate in stage ${stageName}: ${gateName}`);
+        }
+        if (typeof args === "string" && gateArtifactArgs.has(gateName) && !spec.artifacts[args]) {
+          throw new CompilerError(`missing artifact reference in gate ${gateName} for stage ${stageName}: ${args}`);
+        }
+      } catch (error) {
+        if (error instanceof CompilerError) {
+          throw error;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        throw new CompilerError(`invalid gate in stage ${stageName}: ${message}`);
+      }
+    }
+  }
+}
+
+function assertNoImplicitBranching(stagesByFromState: Record<string, Array<{ name: string; spec: StageSpec }>>): void {
+  for (const [state, stages] of Object.entries(stagesByFromState)) {
+    if (stages.length > 1) {
+      throw new CompilerError(
+        `branching requires explicit routing semantics from state ${state}: ${stages.map((stage) => stage.name).join(", ")}`
+      );
     }
   }
 }
@@ -112,6 +155,8 @@ export function compileHarness(spec: HarnessSpec): CompiledHarness {
   for (const stages of Object.values(stagesByFromState)) {
     stages.sort((a, b) => a.name.localeCompare(b.name));
   }
+  assertNoImplicitBranching(stagesByFromState);
+  assertGateReferencesValid(spec);
 
   const graph = buildStageGraph(spec.stages);
   const startStates = findStartStates(graph);

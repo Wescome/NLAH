@@ -29,6 +29,36 @@ describe("compiler", () => {
     expect(() => compileHarness(spec)).toThrow(CompilerError);
   });
 
+  it("unknown gate fails at compile time", () => {
+    const spec = validSpec();
+    spec.stages.CONTRACT!.gate = { all: ["not_a_gate"], any: [] };
+
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
+    expect(() => compileHarness(spec)).toThrow("unknown gate");
+  });
+
+  it("gate artifact references must exist", () => {
+    const spec = validSpec();
+    spec.stages.CONTRACT!.gate = { all: [{ exists: "MissingArtifact" }], any: [] };
+
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
+    expect(() => compileHarness(spec)).toThrow("missing artifact reference");
+  });
+
+  it("implicit branching fails until routing semantics are explicit", () => {
+    const spec = validSpec();
+    spec.stages.ALT_PATCH = {
+      from: "RepoMapped",
+      to: "AltPatchCandidate",
+      role: "PatchWorker",
+      inputs: [],
+      outputs: ["CandidatePatch"]
+    };
+
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
+    expect(() => compileHarness(spec)).toThrow("branching requires explicit routing semantics");
+  });
+
   it("absolute artifact path fails", () => {
     const spec = validSpec();
     spec.artifacts.RepoMap!.path = "/tmp/repo_map.md";

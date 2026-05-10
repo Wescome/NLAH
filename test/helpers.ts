@@ -19,8 +19,8 @@ export function validSpec(): HarnessSpec {
     runtime: {
       max_patch_workers: 1,
       max_repair_rounds: 0,
-      state_root: "runs/current/state",
-      artifact_root: "runs/current/artifacts"
+      state_root: "state",
+      artifact_root: "artifacts"
     },
     roles: {
       Cartographer: { responsibility: "map" },

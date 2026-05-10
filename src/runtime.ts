@@ -117,8 +117,8 @@ export async function runHarness(
   const compiled = compileHarness(await loadHarness(resolvedHarnessPath));
 
   const runRoot = path.resolve("runs", options.runId);
-  const stateRoot = path.join(runRoot, "state");
-  const artifactRoot = path.join(runRoot, "artifacts");
+  const stateRoot = path.join(runRoot, compiled.spec.runtime.state_root);
+  const artifactRoot = path.join(runRoot, compiled.spec.runtime.artifact_root);
   const tracePath = path.join(stateRoot, "task_history.jsonl");
   const summaryPath = path.join(runRoot, "summary.json");
 
@@ -167,9 +167,75 @@ export async function runHarness(
     summaryPath
   };
 
-  await logger.emit("run_started", { fromState: state.currentState });
+  async function emitTrace(
+    event: string,
+    payload: Parameters<TraceLogger["emit"]>[1] = {}
+  ): Promise<void> {
+    state.stageHistory.push(await logger.emit(event, payload));
+  }
+
+  function classifyGateFailure(gate: string): string {
+    if (gate === "exists") {
+      return "missing_artifact";
+    }
+    if (gate === "patch_applies_cleanly") {
+      return "patch_does_not_apply";
+    }
+    if (gate === "verifier_accepts_patch" || gate === "test_results_support_claims") {
+      return "verifier_rejects";
+    }
+    return gate;
+  }
+
+  let repairRoundsUsed = 0;
+  async function tryRepair(failureKey: string, sourceStage: string, message: string): Promise<boolean> {
+    const action = compiled.spec.failure_taxonomy?.[failureKey];
+    if (!action || repairRoundsUsed >= compiled.spec.runtime.max_repair_rounds) {
+      return false;
+    }
+
+    if (action === "retry_stage") {
+      repairRoundsUsed += 1;
+      await emitTrace("repair_started", {
+        stage: sourceStage,
+        fromState: state.currentState,
+        toState: state.currentState,
+        message: `${failureKey}: ${message}`
+      });
+      return true;
+    }
+
+    if (action.startsWith("return_to_")) {
+      const targetStageName = action.slice("return_to_".length);
+      const targetStage = compiled.spec.stages[targetStageName];
+      if (!targetStage) {
+        return false;
+      }
+      const previousState = state.currentState;
+      state.currentState = targetStage.from;
+      repairRoundsUsed += 1;
+      await emitTrace("repair_started", {
+        stage: sourceStage,
+        fromState: previousState,
+        toState: state.currentState,
+        message: `${failureKey}: ${message}`
+      });
+      await emitTrace("state_transition", {
+        stage: sourceStage,
+        fromState: previousState,
+        toState: state.currentState,
+        message: `repair action: ${action}`
+      });
+      return true;
+    }
+
+    return false;
+  }
+
+  await emitTrace("run_started", { fromState: state.currentState });
 
   try {
+    execution:
     while (!compiled.terminalStates.includes(state.currentState)) {
       const stages = compiled.stagesByFromState[state.currentState] ?? [];
       if (stages.length === 0) {
@@ -180,7 +246,7 @@ export async function runHarness(
         throw new RuntimeError(`no enabled stage for state: ${state.currentState}`);
       }
 
-      await logger.emit("stage_started", {
+      await emitTrace("stage_started", {
         stage: stageEntry.name,
         fromState: stageEntry.spec.from,
         toState: stageEntry.spec.to
@@ -217,7 +283,7 @@ export async function runHarness(
       };
       const workerOutput = await stageWorker.execute(workerInput, artifacts);
       validateWorkerCreatedArtifacts(stageEntry.spec.outputs, workerOutput.createdArtifacts);
-      await logger.emit(
+      await emitTrace(
         "worker_completed",
         workerOutput.message === undefined
           ? { stage: stageEntry.name }
@@ -226,16 +292,20 @@ export async function runHarness(
 
       for (const artifact of workerOutput.createdArtifacts) {
         state.artifacts[artifact] = await artifacts.status(artifact);
-        await logger.emit("artifact_created", { stage: stageEntry.name, artifact });
+        await emitTrace("artifact_created", { stage: stageEntry.name, artifact });
       }
 
       for (const output of stageEntry.spec.outputs) {
         const status = await artifacts.status(output);
         if (!status.exists || (status.sizeBytes ?? 0) === 0) {
+          const message = `missing required output artifact: ${output}`;
+          if (await tryRepair("missing_artifact", stageEntry.name, message)) {
+            continue execution;
+          }
           return failRun(
             logger,
             { ...resultBase, finalState: state.currentState },
-            `missing required output artifact: ${output}`,
+            message,
             artifacts
           );
         }
@@ -256,35 +326,39 @@ export async function runHarness(
                 passed: gate.passed,
                 message: gate.message
               };
-        await logger.emit(gate.passed ? "gate_passed" : "gate_failed", {
+        await emitTrace(gate.passed ? "gate_passed" : "gate_failed", {
           ...payload
         });
       }
       const failedGate = gateResults.find((gate) => !gate.passed);
       if (failedGate) {
+        const message = `gate failed: ${failedGate.gate}: ${failedGate.message ?? ""}`.trim();
+        if (await tryRepair(classifyGateFailure(failedGate.gate), stageEntry.name, message)) {
+          continue execution;
+        }
         return failRun(
           logger,
           { ...resultBase, finalState: state.currentState },
-          `gate failed: ${failedGate.gate}: ${failedGate.message ?? ""}`.trim(),
+          message,
           artifacts
         );
       }
 
       const previousState = state.currentState;
       state.currentState = stageEntry.spec.to;
-      await logger.emit("state_transition", {
+      await emitTrace("state_transition", {
         stage: stageEntry.name,
         fromState: previousState,
         toState: state.currentState
       });
-      await logger.emit("stage_completed", {
+      await emitTrace("stage_completed", {
         stage: stageEntry.name,
         fromState: previousState,
         toState: state.currentState
       });
     }
 
-    await logger.emit("run_completed", { toState: state.currentState });
+    await emitTrace("run_completed", { toState: state.currentState });
     const runtimeResult: RuntimeResult = {
       ...resultBase,
       status: "PASS",

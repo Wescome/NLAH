@@ -223,6 +223,134 @@ describe("runtime", () => {
     }
   });
 
+  it("passes populated stage history into workers", async () => {
+    const root = await tempDir("nlah-runtime-stage-history-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const cwd = process.cwd();
+    const observedHistoryLengths: number[] = [];
+
+    class HistoryWorker implements WorkerAdapter {
+      private readonly deterministic = new DeterministicWorkerAdapter();
+
+      async execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput> {
+        observedHistoryLengths.push(input.state.stageHistory.length);
+        expect(input.state.stageHistory.some((event) => event.event === "run_started")).toBe(true);
+        expect(input.state.stageHistory.some((event) => event.event === "stage_started")).toBe(true);
+        return this.deterministic.execute(input, artifacts);
+      }
+    }
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(
+        path.join(cwd, "harnesses/crew.mvp.yaml"),
+        repo,
+        taskPath,
+        "runtime-stage-history-test",
+        new HistoryWorker()
+      );
+
+      expect(result.status).toBe("PASS");
+      expect(observedHistoryLengths[0]).toBeGreaterThanOrEqual(2);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("honors runtime state and artifact root settings", async () => {
+    const root = await tempDir("nlah-runtime-roots-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const spec = validSpec();
+    spec.runtime.state_root = "custom_state";
+    spec.runtime.artifact_root = "artifact_bucket";
+    for (const artifact of Object.values(spec.artifacts)) {
+      artifact.path = artifact.path.replace(/^artifacts\//, "artifact_bucket/");
+    }
+    const harnessPath = path.join(root, "harness.yaml");
+    await writeFile(harnessPath, YAML.stringify(spec), "utf8");
+    const cwd = process.cwd();
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(harnessPath, repo, taskPath, {
+        runId: "runtime-roots-test"
+      });
+
+      expect(result.status).toBe("PASS");
+      expect(result.tracePath).toBe(path.join(result.runRoot, "custom_state", "task_history.jsonl"));
+      expect(result.artifactRoot).toBe(path.join(result.runRoot, "artifact_bucket"));
+      await expect(readFile(path.join(result.artifactRoot, "final.patch"), "utf8")).resolves.toContain(
+        "return a + b;"
+      );
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("uses failure taxonomy to retry a rejected verifier stage", async () => {
+    const root = await tempDir("nlah-runtime-repair-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const cwd = process.cwd();
+    let verifierCalls = 0;
+    const patch = [
+      "diff --git a/src/math.ts b/src/math.ts",
+      "index 0000000..0000001 100644",
+      "--- a/src/math.ts",
+      "+++ b/src/math.ts",
+      "@@ -1,3 +1,3 @@",
+      " export function add(a: number, b: number): number {",
+      "-  return a - b;",
+      "+  return a + b;",
+      " }",
+      ""
+    ].join("\n");
+
+    class RepairWorker implements WorkerAdapter {
+      private readonly deterministic = new DeterministicWorkerAdapter();
+
+      async execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput> {
+        if (input.stageName === "PATCH") {
+          await artifacts.writeText("CandidatePatch", patch);
+          return { createdArtifacts: ["CandidatePatch"] };
+        }
+        if (input.stageName === "VERIFY") {
+          verifierCalls += 1;
+          await artifacts.writeText(
+            "VerifierReport",
+            verifierCalls === 1
+              ? "# Verifier Report\n\nTests run\n\nVerdict: FAIL\n"
+              : "# Verifier Report\n\nTests run\n\nVerdict: PASS\n"
+          );
+          return { createdArtifacts: ["VerifierReport"] };
+        }
+        return this.deterministic.execute(input, artifacts);
+      }
+    }
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(
+        path.join(cwd, "harnesses/crew.mvp.yaml"),
+        repo,
+        taskPath,
+        "runtime-repair-test",
+        new RepairWorker()
+      );
+
+      expect(result.status).toBe("PASS");
+      expect(verifierCalls).toBe(2);
+      await expect(readFile(result.tracePath, "utf8")).resolves.toContain("repair_started");
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
   it("allows a custom fake worker to create artifacts and pass through runtime", async () => {
     const root = await tempDir("nlah-runtime-fake-worker-");
     const repo = await createTargetRepo(root);

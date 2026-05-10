@@ -10,8 +10,8 @@ harness:
 runtime:
   max_patch_workers: 2
   max_repair_rounds: 1
-  state_root: runs/current/state
-  artifact_root: runs/current/artifacts
+  state_root: state
+  artifact_root: artifacts
 
 roles:
   Cartographer:

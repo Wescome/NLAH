@@ -137,10 +137,12 @@ export async function evaluateGateSpec(
     for (const expr of anyExpressions) {
       anyResults.push(await evaluateGateExpression(expr, state, artifacts));
     }
-    results.push(...anyResults);
-    if (!anyResults.some((result) => result.passed)) {
-      results.push(fail("any", "no any-gate passed"));
-    }
+    const passedGate = anyResults.find((result) => result.passed);
+    results.push(
+      passedGate
+        ? pass("any", `any-gate passed: ${passedGate.gate}`)
+        : fail("any", `no any-gate passed: ${anyResults.map((result) => result.gate).join(", ")}`)
+    );
   }
 
   return results;
