@@ -1,7 +1,7 @@
 import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { AdapterResult } from "../src/adapters.js";
+import type { AdapterEnv, AdapterResult } from "../src/adapters.js";
 import { ArtifactManager } from "../src/artifacts.js";
 import { AiderCliWorkerAdapter } from "../src/aider_cli_worker.js";
 import { RuntimeError } from "../src/errors.js";
@@ -25,6 +25,7 @@ type ShellCall = {
   command: string[];
   cwd: string;
   timeoutSeconds?: number;
+  env?: AdapterEnv;
 };
 
 class FakeShell {
@@ -32,11 +33,12 @@ class FakeShell {
 
   constructor(private readonly responses: AdapterResult[]) {}
 
-  async run(command: string[], cwd: string, timeoutSeconds?: number): Promise<AdapterResult> {
+  async run(command: string[], cwd: string, timeoutSeconds?: number, env?: AdapterEnv): Promise<AdapterResult> {
     this.calls.push({
       command,
       cwd,
-      ...(timeoutSeconds === undefined ? {} : { timeoutSeconds })
+      ...(timeoutSeconds === undefined ? {} : { timeoutSeconds }),
+      ...(env === undefined ? {} : { env })
     });
     return (
       this.responses.shift() ?? {
@@ -212,6 +214,21 @@ describe("AiderCliWorkerAdapter", () => {
       cwd: input.state.repoPath,
       timeoutSeconds: 300
     });
+  });
+
+  it("passes configured environment to the aider command only", async () => {
+    const { artifacts, input } = await fixture();
+    const shell = new FakeShell([ok("aider done"), ok(patch)]);
+    const env = {
+      PYTHONUTF8: "1",
+      PYTHONIOENCODING: "utf-8"
+    };
+    const worker = new AiderCliWorkerAdapter({ env }, shell);
+
+    await worker.execute(input, artifacts);
+
+    expect(shell.calls[0]?.env).toEqual(env);
+    expect(shell.calls[1]?.env).toBeUndefined();
   });
 
   it("writes CandidatePatch from diff stdout and returns created artifacts", async () => {

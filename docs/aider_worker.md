@@ -113,6 +113,15 @@ The current manual Aider command shape is:
 aider --yes --no-auto-commits --no-gitignore --map-tokens 0 --no-restore-chat-history --message-file <PATCH.md>
 ```
 
+The demo also runs the Aider subprocess with UTF-8 Python and locale environment variables:
+
+```text
+PYTHONUTF8=1
+PYTHONIOENCODING=utf-8
+LC_ALL=en_US.UTF-8
+LANG=en_US.UTF-8
+```
+
 The `--yes` flag is demo-specific. A captured real run showed Aider entering normal model mode after reading `--message-file`:
 
 ```text
@@ -140,6 +149,8 @@ OpenAIException - 'ascii' codec can't encode character '\u201c'
 ```
 
 The demo disables repo map generation and chat history restoration to isolate Aider from non-prompt Unicode sources while preserving the NLAH runtime behavior.
+
+If the same error persists after isolation, the UTF-8 subprocess environment is the next constraint applied by the demo. This environment is passed only to the Aider command, not to the runtime globally.
 
 After `NLAH_RUN_REAL_AIDER=1` is set, the demo runs a preflight check with `aider --version`. If Aider is unavailable, it prints install guidance and exits before `runHarness` starts.
 

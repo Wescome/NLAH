@@ -9,10 +9,12 @@ export type AdapterResult = {
   stderr: string;
 };
 
+export type AdapterEnv = Record<string, string>;
+
 export class ShellAdapter {
   constructor(private readonly allowedRoots: string[] = []) {}
 
-  async run(command: string[], cwd: string, timeoutSeconds = 120): Promise<AdapterResult> {
+  async run(command: string[], cwd: string, timeoutSeconds = 120, env?: AdapterEnv): Promise<AdapterResult> {
     if (!Array.isArray(command) || command.length === 0 || command.some((part) => typeof part !== "string")) {
       throw new RuntimeError("command must be a non-empty string[]");
     }
@@ -35,6 +37,7 @@ export class ShellAdapter {
       }
       const result = await execa(executable, command.slice(1), {
         cwd: resolvedCwd,
+        ...(env ? { env } : {}),
         timeout: timeoutSeconds * 1000,
         reject: false
       });

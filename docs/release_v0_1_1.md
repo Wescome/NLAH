@@ -81,6 +81,15 @@ The current manual Aider command shape is:
 aider --yes --no-auto-commits --no-gitignore --map-tokens 0 --no-restore-chat-history --message-file <PATCH.md>
 ```
 
+The Aider subprocess is run with:
+
+```text
+PYTHONUTF8=1
+PYTHONIOENCODING=utf-8
+LC_ALL=en_US.UTF-8
+LANG=en_US.UTF-8
+```
+
 A captured real run showed Aider entering normal model mode after reading `--message-file`:
 
 ```text
@@ -114,6 +123,8 @@ OpenAIException - 'ascii' codec can't encode character '\u201c'
 ```
 
 Aider v0.86.2 does not support `--no-map`, so the demo uses `--map-tokens 0` to disable repo map generation. The demo also disables chat history restoration to isolate Aider from non-prompt Unicode sources.
+
+The demo passes UTF-8 Python and locale environment variables to the Aider subprocess only, after isolation still reproduced the same encoding failure.
 
 ## Fake-Shell Test Strategy
 

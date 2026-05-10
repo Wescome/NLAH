@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ArtifactManager } from "./artifacts.js";
-import { ShellAdapter, type AdapterResult } from "./adapters.js";
+import { ShellAdapter, type AdapterEnv, type AdapterResult } from "./adapters.js";
 import { RuntimeError } from "./errors.js";
 import type { WorkerAdapter, WorkerInput, WorkerOutput } from "./workers.js";
 
@@ -11,10 +11,11 @@ export type AiderCliWorkerConfig = {
   extraArgs?: string[];
   timeoutSeconds?: number;
   diffCommand?: string[];
+  env?: AdapterEnv;
 };
 
 type ShellRunner = {
-  run(command: string[], cwd: string, timeoutSeconds?: number): Promise<AdapterResult>;
+  run(command: string[], cwd: string, timeoutSeconds?: number, env?: AdapterEnv): Promise<AdapterResult>;
 };
 
 export class AiderCliWorkerAdapter implements WorkerAdapter {
@@ -35,7 +36,7 @@ export class AiderCliWorkerAdapter implements WorkerAdapter {
 
     const command = this.buildAiderCommand(promptPath);
     const timeoutSeconds = this.config.timeoutSeconds ?? 300;
-    const aiderResult = await this.shell.run(command, input.state.repoPath, timeoutSeconds);
+    const aiderResult = await this.shell.run(command, input.state.repoPath, timeoutSeconds, this.config.env);
 
     if (!aiderResult.ok) {
       throw new RuntimeError(formatCommandFailure("aider command failed", command, aiderResult));

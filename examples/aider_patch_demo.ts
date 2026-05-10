@@ -24,7 +24,13 @@ export function createAiderPatchDemoRegistry(shell?: ShellRunner): WorkerRegistr
         "0",
         "--no-restore-chat-history"
       ],
-      timeoutSeconds: 120
+      timeoutSeconds: 120,
+      env: {
+        PYTHONUTF8: "1",
+        PYTHONIOENCODING: "utf-8",
+        LC_ALL: "en_US.UTF-8",
+        LANG: "en_US.UTF-8"
+      }
     },
     shell
   );

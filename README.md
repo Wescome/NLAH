@@ -149,7 +149,7 @@ Then opt in to the real demo:
 NLAH_RUN_REAL_AIDER=1 pnpm run:aider-patch-demo
 ```
 
-The demo passes `--yes`, `--no-auto-commits`, `--no-gitignore`, `--map-tokens 0`, and `--no-restore-chat-history` to avoid confirmations, commits, non-interactive gitignore prompts, repo-map context, and restored chat history. Its Aider worker timeout is 120 seconds.
+The demo passes `--yes`, `--no-auto-commits`, `--no-gitignore`, `--map-tokens 0`, and `--no-restore-chat-history` to avoid confirmations, commits, non-interactive gitignore prompts, repo-map context, and restored chat history. It also runs Aider with UTF-8 Python and locale environment variables. Its Aider worker timeout is 120 seconds.
 
 ## Not Yet Implemented
 

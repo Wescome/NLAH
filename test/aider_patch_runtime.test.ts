@@ -2,7 +2,7 @@ import { cp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
 import { describe, expect, it } from "vitest";
-import type { AdapterResult } from "../src/adapters.js";
+import type { AdapterEnv, AdapterResult } from "../src/adapters.js";
 import { runHarness } from "../src/runtime.js";
 import { createAiderPatchDemoRegistry, runAiderPatchDemo } from "../examples/aider_patch_demo.js";
 import { createTargetRepo, tempDir } from "./helpers.js";
@@ -24,6 +24,7 @@ type ShellCall = {
   command: string[];
   cwd: string;
   timeoutSeconds?: number;
+  env?: AdapterEnv;
 };
 
 class FakeShell {
@@ -31,11 +32,12 @@ class FakeShell {
 
   constructor(private readonly responses: AdapterResult[]) {}
 
-  async run(command: string[], cwd: string, timeoutSeconds?: number): Promise<AdapterResult> {
+  async run(command: string[], cwd: string, timeoutSeconds?: number, env?: AdapterEnv): Promise<AdapterResult> {
     this.calls.push({
       command,
       cwd,
-      ...(timeoutSeconds === undefined ? {} : { timeoutSeconds })
+      ...(timeoutSeconds === undefined ? {} : { timeoutSeconds }),
+      ...(env === undefined ? {} : { env })
     });
     return (
       this.responses.shift() ?? {
@@ -150,6 +152,12 @@ describe("aider PATCH runtime demo", () => {
       expect(fakeShell.calls[0]?.command).toContain("--map-tokens");
       expect(fakeShell.calls[0]?.command).toContain("0");
       expect(fakeShell.calls[0]?.command).toContain("--no-restore-chat-history");
+      expect(fakeShell.calls[0]?.env).toEqual({
+        PYTHONUTF8: "1",
+        PYTHONIOENCODING: "utf-8",
+        LC_ALL: "en_US.UTF-8",
+        LANG: "en_US.UTF-8"
+      });
       expect(fakeShell.calls[1]?.command[0]).toBe("git");
     } finally {
       process.chdir(cwd);
