@@ -126,6 +126,14 @@ Aider v0.86.2 does not support `--no-map`, so the demo uses `--map-tokens 0` to 
 
 The demo passes UTF-8 Python and locale environment variables to the Aider subprocess only, after isolation still reproduced the same encoding failure.
 
+The guarded real demo was retried after all local mitigations. It still ended with NLAH `empty git diff` because Aider/LiteLLM/OpenAI continued to report:
+
+```text
+OpenAIException - 'ascii' codec can't encode character '\u201c'
+```
+
+The latest captured history also shows `Repo-map: disabled`, so this is treated as a known external-tool issue rather than a crew runtime or adapter contract failure. The fake-shell tests remain the supported CI path for Aider integration.
+
 ## Fake-Shell Test Strategy
 
 Automated tests do not invoke real Aider.

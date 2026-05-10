@@ -150,7 +150,14 @@ OpenAIException - 'ascii' codec can't encode character '\u201c'
 
 The demo disables repo map generation and chat history restoration to isolate Aider from non-prompt Unicode sources while preserving the NLAH runtime behavior.
 
-If the same error persists after isolation, the UTF-8 subprocess environment is the next constraint applied by the demo. This environment is passed only to the Aider command, not to the runtime globally.
+The same error persisted after isolation and after passing the UTF-8 subprocess environment. The captured Aider history shows:
+
+```text
+Repo-map: disabled
+OpenAIException - 'ascii' codec can't encode character '\u201c'
+```
+
+This is recorded as a known external-tool issue in the local Aider/LiteLLM/OpenAI path. The NLAH adapter path remains covered by fake-shell tests, which are the supported CI verification path for this external-tool integration until the upstream/runtime encoding issue is resolved.
 
 After `NLAH_RUN_REAL_AIDER=1` is set, the demo runs a preflight check with `aider --version`. If Aider is unavailable, it prints install guidance and exits before `runHarness` starts.
 
