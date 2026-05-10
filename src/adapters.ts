@@ -1,4 +1,5 @@
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { execa } from "execa";
 import { RuntimeError } from "./errors.js";
 
@@ -71,6 +72,88 @@ export class ShellAdapter {
         failed: true
       };
     }
+  }
+}
+
+export class NodeSpawnAdapter {
+  constructor(private readonly allowedRoots: string[] = []) {}
+
+  async run(command: string[], cwd: string, timeoutSeconds = 120, env?: AdapterEnv): Promise<AdapterResult> {
+    if (!Array.isArray(command) || command.length === 0 || command.some((part) => typeof part !== "string")) {
+      throw new RuntimeError("command must be a non-empty string[]");
+    }
+
+    const resolvedCwd = path.resolve(cwd);
+    if (this.allowedRoots.length > 0) {
+      const allowed = this.allowedRoots.map((root) => path.resolve(root));
+      const insideAllowedRoot = allowed.some(
+        (root) => resolvedCwd === root || resolvedCwd.startsWith(`${root}${path.sep}`)
+      );
+      if (!insideAllowedRoot) {
+        throw new RuntimeError(`working directory is outside allowed roots: ${cwd}`);
+      }
+    }
+
+    const executable = command[0];
+    if (!executable) {
+      throw new RuntimeError("command must include an executable");
+    }
+
+    return new Promise<AdapterResult>((resolve) => {
+      let stdout = "";
+      let stderr = "";
+      let settled = false;
+      let timedOut = false;
+
+      const child = spawn(executable, command.slice(1), {
+        cwd: resolvedCwd,
+        env: env ? { ...process.env, ...env } : process.env,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+
+      const timer = setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGTERM");
+      }, timeoutSeconds * 1000);
+
+      child.stdout?.on("data", (chunk: Buffer) => {
+        stdout += chunk.toString("utf8");
+      });
+      child.stderr?.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString("utf8");
+      });
+      child.on("error", (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve({
+          ok: false,
+          returncode: 1,
+          stdout,
+          stderr: stderr || error.message,
+          failed: true
+        });
+      });
+      child.on("close", (code, signal) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        const returncode = typeof code === "number" ? code : signal ? 1 : 0;
+        resolve({
+          ok: returncode === 0 && !timedOut,
+          returncode,
+          stdout,
+          stderr,
+          ...(timedOut ? { timedOut: true } : {}),
+          ...(signal ? { signal } : {}),
+          ...(timedOut || signal ? { failed: true } : {})
+        });
+      });
+    });
   }
 }
 

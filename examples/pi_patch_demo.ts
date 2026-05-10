@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import type { ShellAdapter } from "../src/adapters.js";
+import { sanitizedCredentialEnv, sanitizeCredentialValue } from "../src/credential_env.js";
 import { PiCliWorkerAdapter } from "../src/pi_cli_worker.js";
 import { checkPiAvailable } from "../src/pi_preflight.js";
 import { runHarness } from "../src/runtime.js";
@@ -13,10 +14,22 @@ type ShellRunner = Pick<ShellAdapter, "run">;
 
 export function createPiPatchDemoRegistry(shell?: ShellRunner): WorkerRegistry {
   const deterministicWorker = new DeterministicWorkerAdapter();
+  const model = process.env.NLAH_PI_MODEL ?? "openai/gpt-4o-mini";
+  const apiKeyArgs = buildApiKeyArgs();
   const piWorker = new PiCliWorkerAdapter(
     {
       command: "pi",
       mode: "json",
+      extraArgs: [
+        "--model",
+        model,
+        ...apiKeyArgs,
+        "--no-session",
+        "--no-context-files",
+        "--tools",
+        "read,edit,write,grep,find,ls"
+      ],
+      env: sanitizedCredentialEnv(),
       timeoutSeconds: 300
     },
     shell
@@ -29,6 +42,11 @@ export function createPiPatchDemoRegistry(shell?: ShellRunner): WorkerRegistry {
       pi: piWorker
     }
   });
+}
+
+function buildApiKeyArgs(): string[] {
+  const apiKey = process.env.NLAH_PI_API_KEY ?? process.env.OFOX_API_KEY;
+  return apiKey ? ["--api-key", sanitizeCredentialValue(apiKey)] : [];
 }
 
 async function writePiPatchHarness(sourcePath: string, targetPath: string): Promise<void> {

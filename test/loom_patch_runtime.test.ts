@@ -113,6 +113,8 @@ describe("loom PATCH runtime demo", () => {
     await cp(path.resolve("examples/TASK.md"), taskPath);
     const harnessPath = await writeLoomPatchHarness(root);
     const fakeShell = new FakeShell([ok("loom PATCH complete"), ok(mathPatch)]);
+    const previousOfoxApiKey = process.env.OFOX_API_KEY;
+    process.env.OFOX_API_KEY = "\u201Cofx-runtime-test\u201D";
     const workerRegistry = createLoomPatchDemoRegistry(fakeShell);
     const cwd = process.cwd();
 
@@ -147,11 +149,25 @@ describe("loom PATCH runtime demo", () => {
       expect(fakeShell.calls).toHaveLength(2);
       expect(fakeShell.calls[0]?.command.slice(0, 4)).toEqual(["pi", "-p", "--mode", "json"]);
       expect(fakeShell.calls[0]?.command).toContain(`@${promptPath}`);
+      expect(fakeShell.calls[0]?.command).toContain("--no-session");
+      expect(fakeShell.calls[0]?.command).toContain("--no-context-files");
+      expect(fakeShell.calls[0]?.command).toContain("--tools");
+      const apiKeyIndex = fakeShell.calls[0]?.command.indexOf("--api-key") ?? -1;
+      expect(apiKeyIndex).toBeGreaterThan(-1);
+      expect(fakeShell.calls[0]?.command[apiKeyIndex + 1]).toBe("ofx-runtime-test");
       expect(fakeShell.calls[0]?.command).not.toContain(promptPath);
+      const openAiKey = fakeShell.calls[0]?.env?.OPENAI_API_KEY ?? "";
+      expect(openAiKey).not.toContain("\u201C");
+      expect(openAiKey).not.toContain("\u201D");
       expect(fakeShell.calls[0]?.cwd).toBe(repo);
       expect(fakeShell.calls[0]?.timeoutSeconds).toBe(300);
       expect(fakeShell.calls[1]?.command[0]).toBe("git");
     } finally {
+      if (previousOfoxApiKey === undefined) {
+        delete process.env.OFOX_API_KEY;
+      } else {
+        process.env.OFOX_API_KEY = previousOfoxApiKey;
+      }
       process.chdir(cwd);
     }
   }, 30000);

@@ -18,6 +18,7 @@ export * from "./pi_cli_worker.js";
 export * from "./loom_cli_worker.js";
 export * from "./aider_preflight.js";
 export * from "./pi_preflight.js";
+export * from "./credential_env.js";
 export * from "./worker_registry.js";
 export * from "./llm_worker.js";
 export * from "./validator.js";

@@ -321,6 +321,36 @@ describe("PiCliWorkerAdapter", () => {
     });
   });
 
+  it("redacts api keys in Pi failure diagnostics", async () => {
+    const { artifacts, input, root } = await fixture();
+    const shell = new FakeShell([
+      {
+        ok: false,
+        returncode: 1,
+        stdout: "",
+        stderr: "provider failed"
+      }
+    ]);
+    const worker = new PiCliWorkerAdapter({ extraArgs: ["--api-key", "secret-pi-key"] }, shell);
+
+    let message = "";
+    try {
+      await worker.execute(input, artifacts);
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain("command: pi -p");
+    expect(message).toContain("[redacted]");
+    expect(message).not.toContain("secret-pi-key");
+
+    const command = JSON.parse(await readFile(path.join(root, "debug", "pi.command.json"), "utf8")) as {
+      command: string[];
+    };
+    expect(command.command).toContain("[redacted]");
+    expect(command.command).not.toContain("secret-pi-key");
+  });
+
   it("writes diff debug artifacts when Pi exits without a diff", async () => {
     const { artifacts, input, root } = await fixture();
     const shell = new FakeShell([ok("pi done"), ok("   \n")]);

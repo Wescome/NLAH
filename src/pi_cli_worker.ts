@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AdapterEnv, AdapterResult } from "./adapters.js";
-import { ShellAdapter } from "./adapters.js";
+import { NodeSpawnAdapter } from "./adapters.js";
 import type { ArtifactManager } from "./artifacts.js";
 import { RuntimeError } from "./errors.js";
 import type { WorkerAdapter, WorkerInput, WorkerOutput } from "./workers.js";
@@ -24,7 +24,7 @@ type ShellRunner = {
 export class PiCliWorkerAdapter implements WorkerAdapter {
   constructor(
     private readonly config: PiCliWorkerConfig = {},
-    private readonly shell: ShellRunner = new ShellAdapter()
+    private readonly shell: ShellRunner = new NodeSpawnAdapter()
   ) {}
 
   async execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput> {
@@ -58,7 +58,12 @@ export class PiCliWorkerAdapter implements WorkerAdapter {
 
     if (!diffResult.stdout.trim()) {
       const debugDir = await writePiDebugArtifacts(input, piCommand, piResult, diffCommand, diffResult);
-      throw new RuntimeError(`empty git diff\ndebug: ${debugDir}`);
+      const upstreamError = extractPiErrorMessage(piResult.stdout);
+      throw new RuntimeError(
+        [`empty git diff`, upstreamError ? `pi error: ${upstreamError}` : "", `debug: ${debugDir}`]
+          .filter(Boolean)
+          .join("\n")
+      );
     }
 
     await artifacts.writeText("CandidatePatch", diffResult.stdout);
@@ -102,7 +107,7 @@ async function writePiDebugArtifacts(
     path.join(debugDir, "pi.command.json"),
     `${JSON.stringify(
       {
-        command: piCommand,
+        command: redactCommandForDiagnostics(piCommand),
         cwd: input.state.repoPath,
         stageName: input.stageName,
         runId: input.state.runId
@@ -137,6 +142,31 @@ async function writePiDebugArtifacts(
   }
 
   return debugDir;
+}
+
+function extractPiErrorMessage(stdout: string): string | undefined {
+  for (const line of stdout.trim().split("\n").reverse()) {
+    if (!line.trim()) {
+      continue;
+    }
+    try {
+      const event = JSON.parse(line) as {
+        message?: {
+          errorMessage?: unknown;
+        };
+        finalError?: unknown;
+      };
+      if (typeof event.finalError === "string" && event.finalError.trim()) {
+        return event.finalError;
+      }
+      if (typeof event.message?.errorMessage === "string" && event.message.errorMessage.trim()) {
+        return event.message.errorMessage;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
 }
 
 function buildPiPrompt(input: WorkerInput): string {
@@ -208,7 +238,7 @@ function rejectDestructiveGitCommand(command: string[], label: string): void {
 function formatCommandFailure(label: string, command: string[], result: AdapterResult): string {
   return [
     label,
-    `command: ${command.join(" ")}`,
+    `command: ${redactCommandForDiagnostics(command).join(" ")}`,
     `exit: ${result.returncode}`,
     result.timedOut ? "timed out: true" : "",
     result.signal ? `signal: ${result.signal}` : "",
@@ -218,4 +248,8 @@ function formatCommandFailure(label: string, command: string[], result: AdapterR
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function redactCommandForDiagnostics(command: string[]): string[] {
+  return command.map((part, index) => (command[index - 1] === "--api-key" ? "[redacted]" : part));
 }
