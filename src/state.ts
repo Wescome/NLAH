@@ -26,4 +26,8 @@ export type RuntimeResult = {
   tracePath: string;
   summaryPath: string;
   message?: string;
+  failureClass?: string;
+  action?: string;
+  retryCounters?: Record<string, number>;
+  warnings?: string[];
 };

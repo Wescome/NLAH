@@ -7,8 +7,32 @@ describe("schema validation", () => {
     expect(HarnessSpecSchema.parse(validSpec()).nlahspec).toBe("0.1");
   });
 
-  it("invalid version fails", () => {
-    expect(HarnessSpecSchema.safeParse({ ...validSpec(), nlahspec: "0.2" }).success).toBe(false);
+  it("v0.2 version parses", () => {
+    expect(HarnessSpecSchema.parse({ ...validSpec(), nlahspec: "0.2" }).nlahspec).toBe("0.2");
+  });
+
+  it("v0.2 runtime_policy and gates fields normalize", () => {
+    const spec = validSpec();
+    const parsed = HarnessSpecSchema.parse({
+      ...spec,
+      nlahspec: "0.2",
+      runtime: undefined,
+      runtime_policy: {
+        ...spec.runtime,
+        max_retries_per_stage: 2
+      },
+      stages: {
+        ...spec.stages,
+        CONTRACT: {
+          ...spec.stages.CONTRACT!,
+          gate: undefined,
+          gates: { all: [{ exists: "IssueContract" }] }
+        }
+      }
+    });
+
+    expect(parsed.runtime.max_repair_rounds).toBe(2);
+    expect(parsed.stages.CONTRACT?.gate?.all).toEqual([{ exists: "IssueContract" }]);
   });
 
   it("missing harness metadata fails", () => {

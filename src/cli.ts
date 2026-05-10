@@ -70,6 +70,8 @@ export function formatCrewManifestText(manifest: CrewManifest): string {
   const lines = [
     `Crew: ${manifest.harnessName}`,
     `Task Family: ${manifest.taskFamily}`,
+    `Spec: ${manifest.nlahspec}`,
+    `Graph Mode: ${manifest.runtimePolicy.graphMode}`,
     `Stage Order: ${manifest.stageOrder.join(" -> ")}`,
     "Stages:"
   ];
@@ -79,6 +81,13 @@ export function formatCrewManifestText(manifest: CrewManifest): string {
     lines.push(
       `- ${stage.name}: ${stage.from} -> ${stage.to} | role=${stage.role}${worker} | inputs=[${stage.inputs.join(", ")}] | outputs=[${stage.outputs.join(", ")}]`
     );
+  }
+
+  if (manifest.warnings.length > 0) {
+    lines.push("Warnings:");
+    for (const warning of manifest.warnings) {
+      lines.push(`- ${warning}`);
+    }
   }
 
   return lines.join("\n");

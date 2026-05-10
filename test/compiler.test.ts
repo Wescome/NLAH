@@ -59,6 +59,74 @@ describe("compiler", () => {
     expect(() => compileHarness(spec)).toThrow("branching requires explicit routing semantics");
   });
 
+  it("implicit joins fail until join semantics are explicit", () => {
+    const spec = validSpec();
+    spec.stages.ALT_CONTRACT = {
+      from: "AlternateStart",
+      to: "IssueContracted",
+      role: "Cartographer",
+      inputs: [],
+      outputs: ["IssueContract"]
+    };
+
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
+    expect(() => compileHarness(spec)).toThrow("joins require explicit routing semantics");
+  });
+
+  it("role read/write contracts are enforced", () => {
+    const spec = validSpec();
+    spec.roles.Cartographer = {
+      responsibility: "map",
+      reads: ["IssueContract"],
+      writes: ["RepoMap"]
+    };
+
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
+    expect(() => compileHarness(spec)).toThrow("output IssueContract is not allowed");
+  });
+
+  it("typed gate contracts compile and validate references", () => {
+    const spec = validSpec();
+    spec.nlahspec = "0.2";
+    spec.failure_taxonomy = { missing_artifact: "abort" };
+    spec.stages.CONTRACT!.gate = {
+      all: [
+        {
+          id: "issue-contract-exists",
+          uses: "exists",
+          reads: ["IssueContract"],
+          proves: "issue_contract_materialized",
+          on_fail: "missing_artifact",
+          args: "IssueContract"
+        }
+      ],
+      any: []
+    };
+
+    expect(compileHarness(spec).warnings).toEqual([]);
+  });
+
+  it("typed gate contracts must reference declared failure classes when taxonomy exists", () => {
+    const spec = validSpec();
+    spec.nlahspec = "0.2";
+    spec.failure_taxonomy = { missing_artifact: "abort" };
+    spec.stages.CONTRACT!.gate = {
+      all: [
+        {
+          id: "issue-contract-exists",
+          uses: "artifact_exists",
+          reads: ["IssueContract"],
+          proves: "issue_contract_materialized",
+          on_fail: "not_declared"
+        }
+      ],
+      any: []
+    };
+
+    expect(() => compileHarness(spec)).toThrow(CompilerError);
+    expect(() => compileHarness(spec)).toThrow("unknown failure class");
+  });
+
   it("absolute artifact path fails", () => {
     const spec = validSpec();
     spec.artifacts.RepoMap!.path = "/tmp/repo_map.md";

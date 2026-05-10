@@ -10,6 +10,11 @@ export type ArtifactStatus = {
   sizeBytes?: number;
 };
 
+export type ArtifactContractResult = {
+  passed: boolean;
+  message: string;
+};
+
 export class ArtifactManager {
   constructor(
     private readonly runRoot: string,
@@ -70,6 +75,68 @@ export class ArtifactManager {
         exists: false
       };
     }
+  }
+
+  async validateContract(name: string): Promise<ArtifactContractResult> {
+    const artifact = this.spec.artifacts[name];
+    if (!artifact) {
+      throw new ArtifactError(`unknown artifact: ${name}`);
+    }
+
+    const status = await this.status(name);
+    if (artifact.required && (!status.exists || (status.sizeBytes ?? 0) === 0)) {
+      return { passed: false, message: `${name} missing or empty` };
+    }
+    if (!artifact.contract) {
+      return { passed: true, message: `${name} has no artifact contract` };
+    }
+
+    const content = await this.readText(name);
+    const contract = artifact.contract;
+
+    if (contract.kind === "markdown") {
+      for (const section of contract.required_sections ?? []) {
+        const escaped = section.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const pattern = new RegExp(`(^|\\n)#+\\s*${escaped}\\b`, "i");
+        if (!pattern.test(content)) {
+          return { passed: false, message: `${name} missing markdown section: ${section}` };
+        }
+      }
+      for (const requiredPattern of contract.required_patterns ?? []) {
+        if (!new RegExp(requiredPattern, "m").test(content)) {
+          return { passed: false, message: `${name} missing required pattern: ${requiredPattern}` };
+        }
+      }
+      return { passed: true, message: `${name} satisfies markdown contract` };
+    }
+
+    if (contract.kind === "json") {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        return { passed: false, message: `${name} contains invalid JSON` };
+      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return { passed: false, message: `${name} JSON artifact must be an object` };
+      }
+      for (const field of contract.required_fields ?? []) {
+        if (!(field in parsed)) {
+          return { passed: false, message: `${name} missing JSON field: ${field}` };
+        }
+      }
+      return { passed: true, message: `${name} satisfies JSON contract` };
+    }
+
+    if (contract.non_empty && content.trim().length === 0) {
+      return { passed: false, message: `${name} must be non-empty` };
+    }
+    for (const requiredPattern of contract.required_patterns ?? []) {
+      if (!new RegExp(requiredPattern, "m").test(content)) {
+        return { passed: false, message: `${name} missing required pattern: ${requiredPattern}` };
+      }
+    }
+    return { passed: true, message: `${name} satisfies text contract` };
   }
 
   async allStatuses(): Promise<Record<string, ArtifactStatus>> {

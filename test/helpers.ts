@@ -19,6 +19,9 @@ export function validSpec(): HarnessSpec {
     runtime: {
       max_patch_workers: 1,
       max_repair_rounds: 0,
+      graph_mode: "linear",
+      default_failure_action: "abort",
+      resume: false,
       state_root: "state",
       artifact_root: "artifacts"
     },

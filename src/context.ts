@@ -5,6 +5,11 @@ import { ContextError } from "./errors.js";
 export type StageContext = {
   taskText: string;
   roleText?: string;
+  rolePolicy?: {
+    reads?: string[];
+    writes?: string[];
+    must_not?: string[];
+  };
   inputArtifacts: Record<string, string>;
   outputArtifactPaths: Record<string, string>;
 };
@@ -33,6 +38,7 @@ export async function buildStageContext(args: {
   rolePath?: string;
   declaredInputs: string[];
   declaredOutputs: string[];
+  rolePolicy?: StageContext["rolePolicy"];
   artifacts: ArtifactManager;
 }): Promise<StageContext> {
   const taskText = await readFile(args.taskPath, "utf8");
@@ -56,6 +62,7 @@ export async function buildStageContext(args: {
     taskText,
     inputArtifacts,
     outputArtifactPaths,
+    ...(args.rolePolicy === undefined ? {} : { rolePolicy: args.rolePolicy }),
     ...(roleText === undefined ? {} : { roleText })
   };
 }

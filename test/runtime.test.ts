@@ -259,6 +259,75 @@ describe("runtime", () => {
     }
   });
 
+  it("passes first-class role policy into worker context", async () => {
+    const root = await tempDir("nlah-runtime-role-policy-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const spec = validSpec();
+    spec.roles.Cartographer = {
+      responsibility: "map",
+      writes: ["IssueContract", "RepoMap"],
+      must_not: ["modify_workspace"]
+    };
+    const harnessPath = path.join(root, "harness.yaml");
+    await writeFile(harnessPath, YAML.stringify(spec), "utf8");
+    const cwd = process.cwd();
+
+    class PolicyWorker implements WorkerAdapter {
+      private readonly deterministic = new DeterministicWorkerAdapter();
+
+      async execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput> {
+        if (input.roleName === "Cartographer") {
+          expect(input.context.rolePolicy?.must_not).toContain("modify_workspace");
+        }
+        return this.deterministic.execute(input, artifacts);
+      }
+    }
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(harnessPath, repo, taskPath, "runtime-role-policy-test", new PolicyWorker());
+      expect(result.status).toBe("PASS");
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("fails when an output violates its artifact contract", async () => {
+    const root = await tempDir("nlah-runtime-artifact-contract-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const spec = validSpec();
+    spec.artifacts.IssueContract!.contract = {
+      kind: "markdown",
+      required_sections: ["Acceptance Criteria"]
+    };
+    const harnessPath = path.join(root, "harness.yaml");
+    await writeFile(harnessPath, YAML.stringify(spec), "utf8");
+    const cwd = process.cwd();
+
+    class BadContractWorker implements WorkerAdapter {
+      async execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput> {
+        for (const output of input.declaredOutputs) {
+          await artifacts.writeText(output, "# Wrong Shape\n");
+        }
+        return { createdArtifacts: [...input.declaredOutputs] };
+      }
+    }
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(harnessPath, repo, taskPath, "runtime-artifact-contract-test", new BadContractWorker());
+      expect(result.status).toBe("FAIL");
+      expect(result.failureClass).toBe("invalid_artifact");
+      expect(result.message).toContain("missing markdown section");
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
   it("honors runtime state and artifact root settings", async () => {
     const root = await tempDir("nlah-runtime-roots-");
     const repo = await createTargetRepo(root);
@@ -346,6 +415,44 @@ describe("runtime", () => {
       expect(result.status).toBe("PASS");
       expect(verifierCalls).toBe(2);
       await expect(readFile(result.tracePath, "utf8")).resolves.toContain("repair_started");
+      expect(result.retryCounters?.VERIFY).toBe(1);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("reports budget_exceeded when a repair action has no retry budget", async () => {
+    const root = await tempDir("nlah-runtime-budget-");
+    const repo = await createTargetRepo(root);
+    const taskPath = path.join(root, "TASK.md");
+    await cp(path.resolve("examples/TASK.md"), taskPath);
+    const spec = validSpec();
+    spec.runtime.max_repair_rounds = 0;
+    spec.failure_taxonomy = { verifier_rejects: "return_to_PATCH" };
+    spec.stages.VERIFY!.gate = { all: ["verifier_accepts_patch"], any: [] };
+    const harnessPath = path.join(root, "harness.yaml");
+    await writeFile(harnessPath, YAML.stringify(spec), "utf8");
+    const cwd = process.cwd();
+
+    class RejectingVerifier implements WorkerAdapter {
+      private readonly deterministic = new DeterministicWorkerAdapter();
+
+      async execute(input: WorkerInput, artifacts: ArtifactManager): Promise<WorkerOutput> {
+        if (input.stageName === "VERIFY") {
+          await artifacts.writeText("VerifierReport", "# Verifier Report\n\nVerdict: FAIL\n");
+          return { createdArtifacts: ["VerifierReport"] };
+        }
+        return this.deterministic.execute(input, artifacts);
+      }
+    }
+
+    process.chdir(root);
+    try {
+      const result = await runHarness(harnessPath, repo, taskPath, "runtime-budget-test", new RejectingVerifier());
+      expect(result.status).toBe("FAIL");
+      expect(result.failureClass).toBe("budget_exceeded");
+      expect(result.action).toBe("return_to_PATCH");
+      await expect(readFile(result.summaryPath, "utf8")).resolves.toContain("budget_exceeded");
     } finally {
       process.chdir(cwd);
     }

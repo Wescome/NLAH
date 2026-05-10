@@ -83,11 +83,14 @@ describe("gates", () => {
         state,
         artifacts
       )
-    ).resolves.toEqual([
+    ).resolves.toMatchObject([
       {
         passed: true,
         gate: "any",
-        message: "any-gate passed: exists"
+        message: "any-gate passed: exists",
+        uses: "any",
+        reads: ["CandidatePatch", "RepoMap"],
+        memberResults: [{ passed: false }, { passed: true }]
       }
     ]);
   });
@@ -103,11 +106,14 @@ describe("gates", () => {
         state,
         artifacts
       )
-    ).resolves.toEqual([
+    ).resolves.toMatchObject([
       {
         passed: false,
         gate: "any",
-        message: "no any-gate passed: exists, exists"
+        message: "no any-gate passed: exists, exists",
+        uses: "any",
+        reads: ["CandidatePatch", "RepoMap"],
+        memberResults: [{ passed: false }, { passed: false }]
       }
     ]);
   });

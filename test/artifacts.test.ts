@@ -45,4 +45,36 @@ describe("ArtifactManager", () => {
     const manager = new ArtifactManager(root, spec);
     expect(() => manager.resolve("RepoMap")).toThrow(ArtifactError);
   });
+
+  it("validates markdown required sections", async () => {
+    const root = await tempDir("nlah-artifacts-contract-");
+    const spec = validSpec();
+    spec.artifacts.RepoMap!.contract = {
+      kind: "markdown",
+      required_sections: ["Relevant files", "Relevant tests"]
+    };
+    const manager = new ArtifactManager(root, spec);
+
+    await manager.writeText("RepoMap", "# Repo Map\n\n## Relevant files\n\n- src/math.ts\n");
+    await expect(manager.validateContract("RepoMap")).resolves.toMatchObject({ passed: false });
+
+    await manager.writeText("RepoMap", "# Repo Map\n\n## Relevant files\n\n- src/math.ts\n\n## Relevant tests\n\n- test/math.test.ts\n");
+    await expect(manager.validateContract("RepoMap")).resolves.toMatchObject({ passed: true });
+  });
+
+  it("validates JSON required fields", async () => {
+    const root = await tempDir("nlah-artifacts-json-contract-");
+    const spec = validSpec();
+    spec.artifacts.VerifierReport!.contract = {
+      kind: "json",
+      required_fields: ["verdict"]
+    };
+    const manager = new ArtifactManager(root, spec);
+
+    await manager.writeText("VerifierReport", "{");
+    await expect(manager.validateContract("VerifierReport")).resolves.toMatchObject({ passed: false });
+
+    await manager.writeText("VerifierReport", JSON.stringify({ verdict: "PASS" }));
+    await expect(manager.validateContract("VerifierReport")).resolves.toMatchObject({ passed: true });
+  });
 });

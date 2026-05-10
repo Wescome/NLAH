@@ -2,11 +2,18 @@ import type { RuntimeState } from "./state.js";
 import type { ArtifactManager } from "./artifacts.js";
 import { ShellAdapter } from "./adapters.js";
 import { GateError } from "./errors.js";
+import type { GateContract } from "./schema.js";
 
 export type GateResult = {
   passed: boolean;
   gate: string;
   message?: string;
+  id?: string;
+  uses?: string;
+  reads?: string[];
+  proves?: string;
+  failureClass?: string;
+  memberResults?: GateResult[];
 };
 
 export type GateFn = (
@@ -24,6 +31,9 @@ function fail(gate: string, message: string): GateResult {
 }
 
 export function parseGateExpression(expr: unknown): { gateName: string; args: unknown } {
+  if (isGateContract(expr)) {
+    return { gateName: expr.uses, args: expr.args };
+  }
   if (typeof expr === "string") {
     return { gateName: expr, args: undefined };
   }
@@ -41,11 +51,64 @@ export function parseGateExpression(expr: unknown): { gateName: string; args: un
   throw new GateError("invalid gate expression");
 }
 
+function isGateContract(expr: unknown): expr is GateContract {
+  return Boolean(
+    expr &&
+      typeof expr === "object" &&
+      !Array.isArray(expr) &&
+      typeof (expr as { id?: unknown }).id === "string" &&
+      typeof (expr as { uses?: unknown }).uses === "string"
+  );
+}
+
+export function hasExplicitGateFailureClass(expr: unknown): boolean {
+  return Boolean(isGateContract(expr) && typeof (expr as { on_fail?: unknown }).on_fail === "string");
+}
+
+export function failureClassForGate(gateName: string): string {
+  if (gateName === "exists") return "missing_artifact";
+  if (gateName === "artifact_contract_satisfied") return "invalid_artifact";
+  if (gateName === "patch_applies_cleanly") return "patch_does_not_apply";
+  if (gateName === "verifier_accepts_patch" || gateName === "test_results_support_claims") {
+    return "verifier_rejects";
+  }
+  return gateName;
+}
+
+export function normalizeGateContract(expr: unknown, fallbackId: string): GateContract {
+  if (isGateContract(expr)) {
+    const args = expr.args ?? (expr.reads?.length === 1 ? expr.reads[0] : undefined);
+    return {
+      id: expr.id,
+      uses: expr.uses,
+      reads: expr.reads ?? [],
+      proves: expr.proves ?? expr.id,
+      on_fail: expr.on_fail ?? failureClassForGate(expr.uses),
+      ...(args === undefined ? {} : { args })
+    };
+  }
+
+  const { gateName, args } = parseGateExpression(expr);
+  const reads = typeof args === "string" ? [args] : [];
+  return {
+    id: fallbackId,
+    uses: gateName,
+    reads,
+    proves: gateName,
+    on_fail: failureClassForGate(gateName),
+    ...(args === undefined ? {} : { args })
+  };
+}
+
 async function readArtifact(artifacts: ArtifactManager, defaultName: string, args: unknown): Promise<string> {
   return artifacts.readText(typeof args === "string" ? args : defaultName);
 }
 
 export const gateRegistry: Record<string, GateFn> = {
+  async artifact_exists(state, artifacts, args) {
+    return gateRegistry.exists!(state, artifacts, args);
+  },
+
   async exists(_state, artifacts, args) {
     if (typeof args !== "string") {
       throw new GateError("exists gate requires an artifact name");
@@ -101,6 +164,16 @@ export const gateRegistry: Record<string, GateFn> = {
     return finalPatch.trim() === candidatePatch.trim()
       ? pass("final_patch_matches_verified_candidate")
       : fail("final_patch_matches_verified_candidate", "FinalPatch does not match CandidatePatch");
+  },
+
+  async artifact_contract_satisfied(_state, artifacts, args) {
+    if (typeof args !== "string") {
+      throw new GateError("artifact_contract_satisfied gate requires an artifact name");
+    }
+    const result = await artifacts.validateContract(args);
+    return result.passed
+      ? pass("artifact_contract_satisfied", `${args} satisfies artifact contract`)
+      : fail("artifact_contract_satisfied", result.message);
   }
 };
 
@@ -109,12 +182,20 @@ export async function evaluateGateExpression(
   state: RuntimeState,
   artifacts: ArtifactManager
 ): Promise<GateResult> {
-  const { gateName, args } = parseGateExpression(expr);
-  const gate = gateRegistry[gateName];
+  const contract = normalizeGateContract(expr, "gate");
+  const gate = gateRegistry[contract.uses];
   if (!gate) {
-    throw new GateError(`unknown gate: ${gateName}`);
+    throw new GateError(`unknown gate: ${contract.uses}`);
   }
-  return gate(state, artifacts, args);
+  const result = await gate(state, artifacts, contract.args);
+  return {
+    ...result,
+    id: contract.id,
+    uses: contract.uses,
+    reads: contract.reads,
+    proves: contract.proves,
+    failureClass: contract.on_fail
+  };
 }
 
 export async function evaluateGateSpec(
@@ -127,21 +208,37 @@ export async function evaluateGateSpec(
   }
 
   const results: GateResult[] = [];
-  for (const expr of gate.all ?? []) {
-    results.push(await evaluateGateExpression(expr, state, artifacts));
+  for (const [index, expr] of (gate.all ?? []).entries()) {
+    results.push(await evaluateGateExpression(normalizeGateContract(expr, `all-${index}`), state, artifacts));
   }
 
   const anyExpressions = gate.any ?? [];
   if (anyExpressions.length > 0) {
     const anyResults: GateResult[] = [];
-    for (const expr of anyExpressions) {
-      anyResults.push(await evaluateGateExpression(expr, state, artifacts));
+    for (const [index, expr] of anyExpressions.entries()) {
+      anyResults.push(await evaluateGateExpression(normalizeGateContract(expr, `any-${index}`), state, artifacts));
     }
     const passedGate = anyResults.find((result) => result.passed);
     results.push(
       passedGate
-        ? pass("any", `any-gate passed: ${passedGate.gate}`)
-        : fail("any", `no any-gate passed: ${anyResults.map((result) => result.gate).join(", ")}`)
+        ? {
+            ...pass("any", `any-gate passed: ${passedGate.gate}`),
+            id: "any",
+            uses: "any",
+            reads: anyResults.flatMap((result) => result.reads ?? []),
+            proves: "at_least_one_gate_passed",
+            failureClass: "verification_failed",
+            memberResults: anyResults
+          }
+        : {
+            ...fail("any", `no any-gate passed: ${anyResults.map((result) => result.gate).join(", ")}`),
+            id: "any",
+            uses: "any",
+            reads: anyResults.flatMap((result) => result.reads ?? []),
+            proves: "at_least_one_gate_passed",
+            failureClass: "verification_failed",
+            memberResults: anyResults
+          }
     );
   }
 

@@ -10,7 +10,7 @@ import {
   assertReachableFrom,
   deterministicStageOrder
 } from "./graph.js";
-import { gateRegistry, parseGateExpression } from "./gates.js";
+import { gateRegistry, hasExplicitGateFailureClass, normalizeGateContract } from "./gates.js";
 
 export type CompiledHarness = {
   spec: HarnessSpec;
@@ -18,6 +18,7 @@ export type CompiledHarness = {
   stageOrder: string[];
   startState: string;
   terminalStates: string[];
+  warnings: string[];
 };
 
 function assertRelativeSafe(value: string, label: string): void {
@@ -56,26 +57,29 @@ function assertInputArtifactsAvailable(
   }
 }
 
-const gateArtifactArgs = new Set([
-  "exists",
-  "patch_applies_cleanly",
-  "repo_map_names_relevant_files",
-  "repo_map_names_test_entrypoints",
-  "verifier_accepts_patch",
-  "test_results_support_claims"
-]);
-
 function assertGateReferencesValid(spec: HarnessSpec): void {
   for (const [stageName, stage] of Object.entries(spec.stages)) {
     const expressions = [...(stage.gate?.all ?? []), ...(stage.gate?.any ?? [])];
-    for (const expression of expressions) {
+    for (const [index, expression] of expressions.entries()) {
       try {
-        const { gateName, args } = parseGateExpression(expression);
-        if (!gateRegistry[gateName]) {
-          throw new CompilerError(`unknown gate in stage ${stageName}: ${gateName}`);
+        const contract = normalizeGateContract(expression, `${stageName}-gate-${index}`);
+        if (!gateRegistry[contract.uses]) {
+          throw new CompilerError(`unknown gate in stage ${stageName}: ${contract.uses}`);
         }
-        if (typeof args === "string" && gateArtifactArgs.has(gateName) && !spec.artifacts[args]) {
-          throw new CompilerError(`missing artifact reference in gate ${gateName} for stage ${stageName}: ${args}`);
+        for (const artifactName of contract.reads) {
+          if (!spec.artifacts[artifactName]) {
+            throw new CompilerError(
+              `missing artifact reference in gate ${contract.uses} for stage ${stageName}: ${artifactName}`
+            );
+          }
+        }
+        if (
+          hasExplicitGateFailureClass(expression) &&
+          spec.failure_taxonomy &&
+          Object.keys(spec.failure_taxonomy).length > 0 &&
+          !spec.failure_taxonomy[contract.on_fail]
+        ) {
+          throw new CompilerError(`unknown failure class in gate ${contract.id} for stage ${stageName}: ${contract.on_fail}`);
         }
       } catch (error) {
         if (error instanceof CompilerError) {
@@ -88,7 +92,10 @@ function assertGateReferencesValid(spec: HarnessSpec): void {
   }
 }
 
-function assertNoImplicitBranching(stagesByFromState: Record<string, Array<{ name: string; spec: StageSpec }>>): void {
+function assertLinearGraphSemantics(
+  stagesByFromState: Record<string, Array<{ name: string; spec: StageSpec }>>,
+  spec: HarnessSpec
+): void {
   for (const [state, stages] of Object.entries(stagesByFromState)) {
     if (stages.length > 1) {
       throw new CompilerError(
@@ -96,6 +103,63 @@ function assertNoImplicitBranching(stagesByFromState: Record<string, Array<{ nam
       );
     }
   }
+
+  const stagesByToState = new Map<string, string[]>();
+  for (const [stageName, stage] of Object.entries(spec.stages)) {
+    stagesByToState.set(stage.to, [...(stagesByToState.get(stage.to) ?? []), stageName]);
+  }
+  for (const [state, stages] of stagesByToState) {
+    if (stages.length > 1) {
+      throw new CompilerError(
+        `joins require explicit routing semantics into state ${state}: ${stages.join(", ")}`
+      );
+    }
+  }
+}
+
+function assertRoleContracts(spec: HarnessSpec): void {
+  for (const [stageName, stage] of Object.entries(spec.stages)) {
+    const role = spec.roles[stage.role];
+    if (!role) continue;
+
+    if (role.reads) {
+      const allowedReads = new Set(role.reads);
+      for (const artifactName of stage.inputs) {
+        if (!allowedReads.has(artifactName)) {
+          throw new CompilerError(`stage ${stageName} input ${artifactName} is not allowed by role ${stage.role} reads`);
+        }
+      }
+    }
+
+    if (role.writes) {
+      const allowedWrites = new Set(role.writes);
+      for (const artifactName of stage.outputs) {
+        if (!allowedWrites.has(artifactName)) {
+          throw new CompilerError(`stage ${stageName} output ${artifactName} is not allowed by role ${stage.role} writes`);
+        }
+      }
+    }
+  }
+}
+
+function compatibilityWarnings(spec: HarnessSpec): string[] {
+  const warnings: string[] = [];
+  if (spec.nlahspec === "0.1") {
+    warnings.push("nlahspec 0.1 normalized to internal 0.2 harness semantics");
+  }
+  for (const [stageName, stage] of Object.entries(spec.stages)) {
+    if (stage.gates) {
+      warnings.push(`stage ${stageName} uses gates compatibility field; normalized to gate`);
+    }
+    for (const [index, expression] of [...(stage.gate?.all ?? []), ...(stage.gate?.any ?? [])].entries()) {
+      if (typeof expression === "string") {
+        warnings.push(`stage ${stageName} gate ${index} uses legacy string syntax`);
+      } else if (expression && typeof expression === "object" && !Array.isArray(expression) && !("uses" in expression)) {
+        warnings.push(`stage ${stageName} gate ${index} uses legacy object syntax`);
+      }
+    }
+  }
+  return warnings;
 }
 
 export async function loadHarness(filePath: string): Promise<HarnessSpec> {
@@ -155,7 +219,8 @@ export function compileHarness(spec: HarnessSpec): CompiledHarness {
   for (const stages of Object.values(stagesByFromState)) {
     stages.sort((a, b) => a.name.localeCompare(b.name));
   }
-  assertNoImplicitBranching(stagesByFromState);
+  assertLinearGraphSemantics(stagesByFromState, spec);
+  assertRoleContracts(spec);
   assertGateReferencesValid(spec);
 
   const graph = buildStageGraph(spec.stages);
@@ -183,6 +248,7 @@ export function compileHarness(spec: HarnessSpec): CompiledHarness {
     stagesByFromState,
     stageOrder,
     startState,
-    terminalStates
+    terminalStates,
+    warnings: compatibilityWarnings(spec)
   };
 }

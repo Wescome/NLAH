@@ -22,7 +22,7 @@ export async function validateHarnessFile(harnessPath: string): Promise<Validati
       status: "VALID",
       harnessPath: resolvedHarnessPath,
       errors: [],
-      warnings: [],
+      warnings: compiled.warnings,
       stageOrder: compiled.stageOrder,
       startState: compiled.startState,
       terminalStates: compiled.terminalStates

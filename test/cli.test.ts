@@ -129,15 +129,28 @@ describe("cli validation formatters", () => {
 
 describe("cli manifest formatters", () => {
   const manifest: CrewManifest = {
+    nlahspec: "0.2",
     harnessName: "CREW_MVP",
     taskFamily: "repository_issue_resolution",
     objective: "test objective",
+    runtimePolicy: {
+      graphMode: "linear",
+      maxRetriesPerStage: 0,
+      maxTotalRetries: 0,
+      defaultFailureAction: "abort",
+      resume: false
+    },
     stageOrder: ["CONTRACT", "MAP"],
     startState: "TaskReceived",
     terminalStates: ["RepoMapped"],
+    warnings: [],
+    roles: {
+      Cartographer: { responsibility: "map" }
+    },
     artifacts: {
       IssueContract: { path: "artifacts/issue_contract.md", required: true }
     },
+    failureTaxonomy: {},
     stages: [
       {
         name: "CONTRACT",
@@ -146,7 +159,17 @@ describe("cli manifest formatters", () => {
         role: "Cartographer",
         inputs: [],
         outputs: ["IssueContract"],
-        gates: ["exists: IssueContract"]
+        gates: ["exists: IssueContract"],
+        gateContracts: [
+          {
+            id: "exists-issue-contract",
+            uses: "exists",
+            reads: ["IssueContract"],
+            proves: "issue_contract_exists",
+            on_fail: "missing_artifact",
+            args: "IssueContract"
+          }
+        ]
       }
     ]
   };

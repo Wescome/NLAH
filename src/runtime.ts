@@ -75,13 +75,32 @@ async function failRun(
   logger: TraceLogger,
   result: Omit<RuntimeResult, "status">,
   message: string,
-  artifacts: ArtifactManager
+  artifacts: ArtifactManager,
+  details?: {
+    failureClass?: string;
+    action?: string;
+    failedStage?: string;
+    failedGateId?: string;
+    retryCounters?: Record<string, number>;
+    warnings?: string[];
+  }
 ): Promise<RuntimeResult> {
-  await logger.emit("run_failed", { message });
+  await logger.emit("run_failed", {
+    message,
+    ...(details?.failureClass ? { failureClass: details.failureClass } : {}),
+    ...(details?.action ? { action: details.action } : {}),
+    ...(details?.failedStage ? { stage: details.failedStage } : {}),
+    ...(details?.failedGateId ? { gateId: details.failedGateId } : {}),
+    ...(details?.retryCounters ? { retryCounters: details.retryCounters } : {})
+  });
   const runtimeResult: RuntimeResult = {
     ...result,
     status: "FAIL",
-    message
+    message,
+    ...(details?.failureClass ? { failureClass: details.failureClass } : {}),
+    ...(details?.action ? { action: details.action } : {}),
+    ...(details?.retryCounters ? { retryCounters: details.retryCounters } : {}),
+    ...(details?.warnings ? { warnings: details.warnings } : {})
   };
   await writeRunSummary(runtimeResult, artifacts);
   return runtimeResult;
@@ -96,6 +115,10 @@ async function writeRunSummary(result: RuntimeResult, artifacts: ArtifactManager
     artifactRoot: result.artifactRoot,
     tracePath: result.tracePath,
     ...(result.message === undefined ? {} : { message: result.message }),
+    ...(result.failureClass === undefined ? {} : { failureClass: result.failureClass }),
+    ...(result.action === undefined ? {} : { action: result.action }),
+    ...(result.retryCounters === undefined ? {} : { retryCounters: result.retryCounters }),
+    ...(result.warnings === undefined ? {} : { warnings: result.warnings }),
     artifacts: await artifacts.allStatuses()
   };
   await mkdir(path.dirname(result.summaryPath), { recursive: true });
@@ -136,7 +159,11 @@ export async function runHarness(
       summaryPath
     };
     await logger.emit("run_started", { fromState: compiled.startState });
-    return failRun(logger, resultBase, `run directory already exists: ${runRoot}`, artifacts);
+    return failRun(logger, resultBase, `run directory already exists: ${runRoot}`, artifacts, {
+      failureClass: "run_already_exists",
+      action: "abort",
+      warnings: compiled.warnings
+    });
   }
 
   await mkdir(stateRoot, { recursive: true });
@@ -174,62 +201,74 @@ export async function runHarness(
     state.stageHistory.push(await logger.emit(event, payload));
   }
 
-  function classifyGateFailure(gate: string): string {
-    if (gate === "exists") {
-      return "missing_artifact";
-    }
-    if (gate === "patch_applies_cleanly") {
-      return "patch_does_not_apply";
-    }
-    if (gate === "verifier_accepts_patch" || gate === "test_results_support_claims") {
-      return "verifier_rejects";
-    }
-    return gate;
+  let repairRoundsUsed = 0;
+  const retryCounters: Record<string, number> = {};
+  function maxRetriesReached(): boolean {
+    const maxTotalRetries = compiled.spec.runtime.max_total_retries ?? compiled.spec.runtime.max_repair_rounds;
+    return repairRoundsUsed >= compiled.spec.runtime.max_repair_rounds || repairRoundsUsed >= maxTotalRetries;
   }
 
-  let repairRoundsUsed = 0;
-  async function tryRepair(failureKey: string, sourceStage: string, message: string): Promise<boolean> {
-    const action = compiled.spec.failure_taxonomy?.[failureKey];
-    if (!action || repairRoundsUsed >= compiled.spec.runtime.max_repair_rounds) {
-      return false;
+  async function tryRepair(
+    failureKey: string,
+    sourceStage: string,
+    message: string
+  ): Promise<{ repaired: boolean; action: string; failureClass?: string }> {
+    const stageAction = compiled.spec.stages[sourceStage]?.on_failure?.[failureKey];
+    const action = stageAction ?? compiled.spec.failure_taxonomy?.[failureKey] ?? compiled.spec.runtime.default_failure_action;
+    if (!action || action === "abort") {
+      return { repaired: false, action: action ?? "abort" };
+    }
+    if (maxRetriesReached()) {
+      return { repaired: false, action, failureClass: "budget_exceeded" };
     }
 
     if (action === "retry_stage") {
       repairRoundsUsed += 1;
+      retryCounters[sourceStage] = (retryCounters[sourceStage] ?? 0) + 1;
       await emitTrace("repair_started", {
         stage: sourceStage,
         fromState: state.currentState,
         toState: state.currentState,
-        message: `${failureKey}: ${message}`
+        message: `${failureKey}: ${message}`,
+        failureClass: failureKey,
+        action,
+        retryCounters
       });
-      return true;
+      return { repaired: true, action };
     }
 
     if (action.startsWith("return_to_")) {
       const targetStageName = action.slice("return_to_".length);
       const targetStage = compiled.spec.stages[targetStageName];
       if (!targetStage) {
-        return false;
+        return { repaired: false, action };
       }
       const previousState = state.currentState;
       state.currentState = targetStage.from;
       repairRoundsUsed += 1;
+      retryCounters[sourceStage] = (retryCounters[sourceStage] ?? 0) + 1;
       await emitTrace("repair_started", {
         stage: sourceStage,
         fromState: previousState,
         toState: state.currentState,
-        message: `${failureKey}: ${message}`
+        message: `${failureKey}: ${message}`,
+        failureClass: failureKey,
+        action,
+        retryCounters
       });
       await emitTrace("state_transition", {
         stage: sourceStage,
         fromState: previousState,
         toState: state.currentState,
-        message: `repair action: ${action}`
+        message: `repair action: ${action}`,
+        failureClass: failureKey,
+        action,
+        retryCounters
       });
-      return true;
+      return { repaired: true, action };
     }
 
-    return false;
+    return { repaired: false, action };
   }
 
   await emitTrace("run_started", { fromState: state.currentState });
@@ -248,8 +287,12 @@ export async function runHarness(
 
       await emitTrace("stage_started", {
         stage: stageEntry.name,
+        role: stageEntry.spec.role,
+        worker: stageEntry.spec.worker ?? "default",
         fromState: stageEntry.spec.from,
-        toState: stageEntry.spec.to
+        toState: stageEntry.spec.to,
+        inputArtifacts: stageEntry.spec.inputs,
+        outputArtifacts: stageEntry.spec.outputs
       });
 
       const stageWorker =
@@ -266,11 +309,21 @@ export async function runHarness(
         "roles",
         roleNameToFileName(stageEntry.spec.role)
       );
+      const roleSpec = compiled.spec.roles[stageEntry.spec.role];
       const context = await buildStageContext({
         taskPath: resolvedTaskPath,
         rolePath,
         declaredInputs: stageEntry.spec.inputs,
         declaredOutputs: stageEntry.spec.outputs,
+        ...(roleSpec === undefined
+          ? {}
+          : {
+              rolePolicy: {
+                ...(roleSpec.reads === undefined ? {} : { reads: roleSpec.reads }),
+                ...(roleSpec.writes === undefined ? {} : { writes: roleSpec.writes }),
+                ...(roleSpec.must_not === undefined ? {} : { must_not: roleSpec.must_not })
+              }
+            }),
         artifacts
       });
       const workerInput = {
@@ -292,21 +345,58 @@ export async function runHarness(
 
       for (const artifact of workerOutput.createdArtifacts) {
         state.artifacts[artifact] = await artifacts.status(artifact);
-        await emitTrace("artifact_created", { stage: stageEntry.name, artifact });
+        await emitTrace("artifact_created", {
+          stage: stageEntry.name,
+          role: stageEntry.spec.role,
+          worker: stageEntry.spec.worker ?? "default",
+          artifact,
+          path: state.artifacts[artifact]?.path,
+          producerStage: stageEntry.name,
+          producerRole: stageEntry.spec.role,
+          inputArtifacts: stageEntry.spec.inputs
+        });
       }
 
       for (const output of stageEntry.spec.outputs) {
         const status = await artifacts.status(output);
         if (!status.exists || (status.sizeBytes ?? 0) === 0) {
           const message = `missing required output artifact: ${output}`;
-          if (await tryRepair("missing_artifact", stageEntry.name, message)) {
+          const repair = await tryRepair("missing_artifact", stageEntry.name, message);
+          if (repair.repaired) {
             continue execution;
           }
           return failRun(
             logger,
             { ...resultBase, finalState: state.currentState },
             message,
-            artifacts
+            artifacts,
+            {
+              failureClass: repair.failureClass ?? "missing_artifact",
+              action: repair.action,
+              failedStage: stageEntry.name,
+              retryCounters,
+              warnings: compiled.warnings
+            }
+          );
+        }
+        const contractResult = await artifacts.validateContract(output);
+        if (!contractResult.passed) {
+          const repair = await tryRepair("invalid_artifact", stageEntry.name, contractResult.message);
+          if (repair.repaired) {
+            continue execution;
+          }
+          return failRun(
+            logger,
+            { ...resultBase, finalState: state.currentState },
+            contractResult.message,
+            artifacts,
+            {
+              failureClass: repair.failureClass ?? "invalid_artifact",
+              action: repair.action,
+              failedStage: stageEntry.name,
+              retryCounters,
+              warnings: compiled.warnings
+            }
           );
         }
       }
@@ -327,20 +417,36 @@ export async function runHarness(
                 message: gate.message
               };
         await emitTrace(gate.passed ? "gate_passed" : "gate_failed", {
-          ...payload
+          ...payload,
+          ...(gate.id ? { gateId: gate.id } : {}),
+          ...(gate.uses ? { uses: gate.uses } : {}),
+          ...(gate.reads ? { reads: gate.reads } : {}),
+          ...(gate.proves ? { proves: gate.proves } : {}),
+          ...(gate.failureClass ? { failureClass: gate.failureClass } : {}),
+          ...(gate.memberResults ? { memberResults: gate.memberResults } : {})
         });
       }
       const failedGate = gateResults.find((gate) => !gate.passed);
       if (failedGate) {
         const message = `gate failed: ${failedGate.gate}: ${failedGate.message ?? ""}`.trim();
-        if (await tryRepair(classifyGateFailure(failedGate.gate), stageEntry.name, message)) {
+        const failureClass = failedGate.failureClass ?? failedGate.gate;
+        const repair = await tryRepair(failureClass, stageEntry.name, message);
+        if (repair.repaired) {
           continue execution;
         }
         return failRun(
           logger,
           { ...resultBase, finalState: state.currentState },
           message,
-          artifacts
+          artifacts,
+          {
+            failureClass: repair.failureClass ?? failureClass,
+            action: repair.action,
+            failedStage: stageEntry.name,
+            ...(failedGate.id ? { failedGateId: failedGate.id } : {}),
+            retryCounters,
+            warnings: compiled.warnings
+          }
         );
       }
 
@@ -349,7 +455,9 @@ export async function runHarness(
       await emitTrace("state_transition", {
         stage: stageEntry.name,
         fromState: previousState,
-        toState: state.currentState
+        toState: state.currentState,
+        passedGateIds: gateResults.filter((gate) => gate.passed).map((gate) => gate.id ?? gate.gate),
+        producedArtifacts: stageEntry.spec.outputs
       });
       await emitTrace("stage_completed", {
         stage: stageEntry.name,
@@ -362,7 +470,9 @@ export async function runHarness(
     const runtimeResult: RuntimeResult = {
       ...resultBase,
       status: "PASS",
-      finalState: state.currentState
+      finalState: state.currentState,
+      retryCounters,
+      warnings: compiled.warnings
     };
     await writeRunSummary(runtimeResult, artifacts);
     return runtimeResult;

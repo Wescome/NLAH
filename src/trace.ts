@@ -6,12 +6,29 @@ export type TraceEvent = {
   runId: string;
   event: string;
   stage?: string;
+  role?: string;
+  worker?: string;
   fromState?: string;
   toState?: string;
   artifact?: string;
+  path?: string;
   gate?: string;
+  gateId?: string;
+  uses?: string;
+  reads?: string[];
+  proves?: string;
+  failureClass?: string;
+  action?: string;
+  retryCounters?: Record<string, number>;
   passed?: boolean;
   message?: string;
+  inputArtifacts?: string[];
+  outputArtifacts?: string[];
+  producedArtifacts?: string[];
+  producerStage?: string;
+  producerRole?: string;
+  passedGateIds?: string[];
+  memberResults?: unknown;
 };
 
 export class TraceLogger {
