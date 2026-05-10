@@ -138,6 +138,14 @@ Worker adapter matrix: [docs/worker_adapters.md](docs/worker_adapters.md).
 
 `PiCliWorkerAdapter`: CLI worker for Pi print/JSON mode. Tests use a fake shell; Pi is not a package dependency and is not invoked by tests. See [docs/pi_worker.md](docs/pi_worker.md).
 
+The optional Pi PATCH demo wires Pi into the PATCH stage while deterministic workers handle the other stages:
+
+```bash
+pnpm run:pi-patch-demo
+```
+
+Manual use requires Pi to be installed separately. Automated verification does not require real Pi.
+
 Manual Aider demo runs are guarded because they invoke real local Aider. Aider is not installed by this repo; install and verify it manually first:
 
 ```bash

@@ -65,6 +65,18 @@ pi -p <promptPath> --mode json
 
 Extra args are appended to the configured command array. Commands are executed through `ShellAdapter` with `cwd = repoPath`.
 
+## Runtime Demo
+
+The optional runtime demo wires `PiCliWorkerAdapter` into the PATCH stage while all other stages use `DeterministicWorkerAdapter`:
+
+```bash
+pnpm run:pi-patch-demo
+```
+
+The demo creates a temporary harness variant from `harnesses/crew.mvp.yaml` where `PATCH.worker = "pi"`. It does not permanently change the canonical crew harness.
+
+Automated tests use a fake shell and do not invoke real Pi. Manual use requires Pi to be installed separately.
+
 ## Artifact Flow
 
 Pi edits repo files.
