@@ -6,7 +6,7 @@ import type { ArtifactManager } from "./artifacts.js";
 import { RuntimeError } from "./errors.js";
 import type { WorkerAdapter, WorkerInput, WorkerOutput } from "./workers.js";
 
-export type PiCliWorkerMode = "print" | "json";
+export type PiCliWorkerMode = "text" | "json";
 
 export type PiCliWorkerConfig = {
   command?: string;
@@ -72,11 +72,12 @@ export class PiCliWorkerAdapter implements WorkerAdapter {
       throw new RuntimeError("pi command must not be empty");
     }
 
-    const mode = this.config.mode ?? "print";
+    const mode = this.config.mode ?? "text";
+    const promptFileArg = `@${promptPath}`;
     const result =
       mode === "json"
-        ? [command, "-p", promptPath, "--mode", "json", ...(this.config.extraArgs ?? [])]
-        : [command, "-p", promptPath, ...(this.config.extraArgs ?? [])];
+        ? [command, "-p", "--mode", "json", promptFileArg, ...(this.config.extraArgs ?? [])]
+        : [command, "-p", promptFileArg, ...(this.config.extraArgs ?? [])];
 
     validateCommand(result, "pi command");
     rejectDestructiveGitCommand(result, "pi command");

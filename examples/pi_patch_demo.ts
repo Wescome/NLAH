@@ -16,7 +16,7 @@ export function createPiPatchDemoRegistry(shell?: ShellRunner): WorkerRegistry {
   const piWorker = new PiCliWorkerAdapter(
     {
       command: "pi",
-      mode: "print",
+      mode: "text",
       timeoutSeconds: 300
     },
     shell

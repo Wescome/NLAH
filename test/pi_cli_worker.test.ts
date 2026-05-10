@@ -168,18 +168,21 @@ describe("PiCliWorkerAdapter", () => {
     expect(prompt).not.toContain("\u2026");
   });
 
-  it("builds the default print-mode command", async () => {
+  it("builds the default text-mode command", async () => {
     const { artifacts, input, root } = await fixture();
     const shell = new FakeShell([ok("pi done"), ok(patch)]);
     const worker = new PiCliWorkerAdapter({}, shell);
+    const promptPath = path.join(root, "worker_prompts", "PATCH.pi.md");
 
     await worker.execute(input, artifacts);
 
     expect(shell.calls[0]).toEqual({
-      command: ["pi", "-p", path.join(root, "worker_prompts", "PATCH.pi.md")],
+      command: ["pi", "-p", `@${promptPath}`],
       cwd: input.state.repoPath,
       timeoutSeconds: 300
     });
+    expect(shell.calls[0]?.command).not.toContain(promptPath);
+    expect(shell.calls[0]?.command).toContain(`@${promptPath}`);
     expect(shell.calls[0]?.command).not.toContain("--mode");
     expect(shell.calls[0]?.command).not.toContain("json");
   });
@@ -194,9 +197,9 @@ describe("PiCliWorkerAdapter", () => {
     expect(shell.calls[0]?.command).toEqual([
       "pi",
       "-p",
-      path.join(root, "worker_prompts", "PATCH.pi.md"),
       "--mode",
-      "json"
+      "json",
+      `@${path.join(root, "worker_prompts", "PATCH.pi.md")}`
     ]);
   });
 
@@ -210,7 +213,7 @@ describe("PiCliWorkerAdapter", () => {
     expect(shell.calls[0]?.command).toEqual([
       "pi",
       "-p",
-      path.join(root, "worker_prompts", "PATCH.pi.md"),
+      `@${path.join(root, "worker_prompts", "PATCH.pi.md")}`,
       "--some-flag"
     ]);
   });

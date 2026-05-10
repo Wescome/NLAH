@@ -41,7 +41,7 @@ Those features make Pi a useful execution substrate while leaving orchestration 
 The v1 adapter scope is intentionally narrow:
 
 - CLI only
-- print/json mode only
+- text/json print mode only
 - `CandidatePatch` only
 - fake-shell tests only
 - no package dependency
@@ -51,16 +51,24 @@ The adapter supports PATCH-stage experiments first. Other stages can remain dete
 
 ## Command Shape
 
-Print mode:
+Pi argument semantics:
+
+- `-p` / `--print` is a boolean flag.
+- `@file` passes file contents as a file argument.
+- `--mode json` selects JSON output mode.
+
+NLAH writes prompt files for auditability and passes them to Pi as `@file` arguments.
+
+Text mode:
 
 ```text
-pi -p <promptPath>
+pi -p @<promptPath>
 ```
 
 JSON mode:
 
 ```text
-pi -p <promptPath> --mode json
+pi -p --mode json @<promptPath>
 ```
 
 Extra args are appended to the configured command array. Commands are executed through `ShellAdapter` with `cwd = repoPath`.

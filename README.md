@@ -140,7 +140,7 @@ Worker adapter matrix: [docs/worker_adapters.md](docs/worker_adapters.md).
 
 `AiderCliWorkerAdapter`: external coding-tool adapter for PATCH-stage experiments. Aider is not a package dependency, automated tests use a fake shell, and the adapter does not commit or push. See [docs/aider_worker.md](docs/aider_worker.md).
 
-`PiCliWorkerAdapter`: CLI worker for Pi print/JSON mode. Tests use a fake shell; Pi is not a package dependency and is not invoked by tests. See [docs/pi_worker.md](docs/pi_worker.md).
+`PiCliWorkerAdapter`: CLI worker for Pi text/JSON print mode using `@file` prompt arguments. Tests use a fake shell; Pi is not a package dependency and is not invoked by tests. See [docs/pi_worker.md](docs/pi_worker.md).
 
 The optional Pi PATCH demo wires Pi into the PATCH stage while deterministic workers handle the other stages:
 

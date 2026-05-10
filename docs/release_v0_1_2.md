@@ -22,7 +22,7 @@ Current behavior:
 
 - writes a stage prompt under `runs/<runId>/worker_prompts/<stageName>.pi.md`
 - invokes a configured Pi command through `ShellAdapter`
-- supports print and JSON command modes
+- supports text and JSON print command modes
 - captures a non-empty git diff
 - writes `CandidatePatch`
 - returns declared artifact names
@@ -58,7 +58,7 @@ The Pi tests use fake shell implementations to verify:
 - prompt file creation
 - prompt contents
 - Pi command construction
-- print/json mode behavior
+- text/json print mode behavior
 - extra argument handling
 - optional environment handling
 - diff command execution

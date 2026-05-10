@@ -143,7 +143,9 @@ describe("pi PATCH runtime demo", () => {
       expect(prompt).toContain("### RepoMap");
 
       expect(fakeShell.calls).toHaveLength(2);
-      expect(fakeShell.calls[0]?.command).toEqual(["pi", "-p", promptPath]);
+      expect(fakeShell.calls[0]?.command.slice(0, 2)).toEqual(["pi", "-p"]);
+      expect(fakeShell.calls[0]?.command).toContain(`@${promptPath}`);
+      expect(fakeShell.calls[0]?.command).not.toContain(promptPath);
       expect(fakeShell.calls[0]?.cwd).toBe(repo);
       expect(fakeShell.calls[0]?.timeoutSeconds).toBe(300);
       expect(fakeShell.calls[1]?.command[0]).toBe("git");
