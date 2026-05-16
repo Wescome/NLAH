@@ -60,9 +60,19 @@ export interface StageResult {
 // Single gate evaluation outcome. `gateName` should be the gate id when
 // available so traces and retry decisions can be correlated with the
 // `GateContract.id` field from the harness spec.
+//
+// `failureClass` is the semantic failure category derived from the gate
+// function (e.g. `missing_artifact` for `exists`, `verifier_rejects` for
+// `verifier_accepts_patch`). The caller (dispatcher / harness-dispatcher.ts)
+// is responsible for setting it from `GateEvalRecord.failureClass`. Pure
+// `advanceHarness` uses it to resolve `on_failure` lookup keys (matching
+// the legacy `runHarness` behaviour where `on_failure` keys are failure
+// classes, not gate IDs).
 export interface GateResult {
   gateName: string;
   passed: boolean;
+  /** Semantic failure class for on_failure/failure_taxonomy lookup. */
+  failureClass?: string;
   detail?: string;
 }
 
@@ -207,10 +217,13 @@ export function advanceHarness(
   const failedGate = result.gateResults.find((gate) => !gate.passed);
 
   if (failedGate) {
-    // Resolve failure action: stage-level on_failure → spec-level failure_taxonomy → runtime default
+    // Resolve failure action using failure class as the primary key (matching
+    // legacy runHarness: on_failure maps failure CLASSES not gate IDs). Fall
+    // back to gate name for callers that set gateName but not failureClass.
+    const failureKey = failedGate.failureClass ?? failedGate.gateName;
     const resolvedAction: string =
-      stageSpec.on_failure?.[failedGate.gateName] ??
-      compiled.spec.failure_taxonomy?.[failedGate.gateName] ??
+      stageSpec.on_failure?.[failureKey] ??
+      compiled.spec.failure_taxonomy?.[failureKey] ??
       compiled.spec.runtime.default_failure_action ??
       "abort";
 
