@@ -4,7 +4,7 @@ import { ShellAdapter } from "./adapters.js";
 import { GateError } from "./errors.js";
 import type { GateContract } from "./schema.js";
 
-export type GateResult = {
+export type GateEvalRecord = {
   passed: boolean;
   gate: string;
   message?: string;
@@ -13,20 +13,20 @@ export type GateResult = {
   reads?: string[];
   proves?: string;
   failureClass?: string;
-  memberResults?: GateResult[];
+  memberResults?: GateEvalRecord[];
 };
 
 export type GateFn = (
   state: RuntimeState,
   artifacts: ArtifactManager,
   args: unknown
-) => Promise<GateResult>;
+) => Promise<GateEvalRecord>;
 
-function pass(gate: string, message?: string): GateResult {
+function pass(gate: string, message?: string): GateEvalRecord {
   return message === undefined ? { passed: true, gate } : { passed: true, gate, message };
 }
 
-function fail(gate: string, message: string): GateResult {
+function fail(gate: string, message: string): GateEvalRecord {
   return { passed: false, gate, message };
 }
 
@@ -191,7 +191,7 @@ export async function evaluateGateExpression(
   expr: unknown,
   state: RuntimeState,
   artifacts: ArtifactManager
-): Promise<GateResult> {
+): Promise<GateEvalRecord> {
   const contract = normalizeGateContract(expr, "gate");
   const gate = gateRegistry[contract.uses];
   if (!gate) {
@@ -212,19 +212,19 @@ export async function evaluateGateSpec(
   gate: { all?: unknown[]; any?: unknown[] } | undefined,
   state: RuntimeState,
   artifacts: ArtifactManager
-): Promise<GateResult[]> {
+): Promise<GateEvalRecord[]> {
   if (!gate) {
     return [];
   }
 
-  const results: GateResult[] = [];
+  const results: GateEvalRecord[] = [];
   for (const [index, expr] of (gate.all ?? []).entries()) {
     results.push(await evaluateGateExpression(normalizeGateContract(expr, `all-${index}`), state, artifacts));
   }
 
   const anyExpressions = gate.any ?? [];
   if (anyExpressions.length > 0) {
-    const anyResults: GateResult[] = [];
+    const anyResults: GateEvalRecord[] = [];
     for (const [index, expr] of anyExpressions.entries()) {
       anyResults.push(await evaluateGateExpression(normalizeGateContract(expr, `any-${index}`), state, artifacts));
     }
