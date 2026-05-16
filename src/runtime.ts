@@ -132,7 +132,10 @@ function resolveNextStageName(
   return { kind: "stage", name: next.name };
 }
 
-function stageAttemptBudget(compiled: CompiledHarness): number {
+function stageAttemptBudget(compiled: CompiledHarness, stageSpec?: { max_stage_attempts?: number | undefined }): number {
+  if (typeof stageSpec?.max_stage_attempts === "number") {
+    return stageSpec.max_stage_attempts;
+  }
   const fromSpec = compiled.spec.runtime.max_repair_rounds;
   if (typeof fromSpec === "number" && fromSpec > 0) {
     return fromSpec;
@@ -204,7 +207,14 @@ export function advanceHarness(
   const failedGate = result.gateResults.find((gate) => !gate.passed);
 
   if (failedGate) {
-    const budget = stageAttemptBudget(compiled);
+    // Resolve failure action: stage-level on_failure → spec-level failure_taxonomy → runtime default
+    const resolvedAction: string =
+      stageSpec.on_failure?.[failedGate.gateName] ??
+      compiled.spec.failure_taxonomy?.[failedGate.gateName] ??
+      compiled.spec.runtime.default_failure_action ??
+      "abort";
+
+    const budget = stageAttemptBudget(compiled, stageSpec);
     const stageAttempts: Record<string, number> = {
       ...state.stageAttempts,
       [result.stageName]: nextAttempts
@@ -216,11 +226,27 @@ export function advanceHarness(
       totalAttempts: state.totalAttempts + 1
     };
 
+    const gateDetail = failedGate.detail ? `: ${failedGate.detail}` : "";
+    const gateMsg = `gate failed: ${failedGate.gateName}${gateDetail}`;
+
+    // 'abort' → fail immediately, no budget check
+    if (resolvedAction === "abort") {
+      const failed: HarnessRunResult = {
+        overall: "fail",
+        finalStage: result.stageName,
+        reason: `${gateMsg} (action: abort)`,
+        failureClass: "gate_abort"
+      };
+      return {
+        action: "fail",
+        result: failed,
+        newState: { ...baseState, status: "failed", result: failed }
+      };
+    }
+
+    // Budget exhausted → fail regardless of the declared action
     if (nextAttempts >= budget) {
-      const reason =
-        `gate failed: ${failedGate.gateName}` +
-        (failedGate.detail ? `: ${failedGate.detail}` : "") +
-        ` (budget exceeded: ${nextAttempts}/${budget})`;
+      const reason = `${gateMsg} (budget exceeded: ${nextAttempts}/${budget})`;
       const failed: HarnessRunResult = {
         overall: "fail",
         finalStage: result.stageName,
@@ -234,6 +260,30 @@ export function advanceHarness(
       };
     }
 
+    // 'return_to_<stageName>' → rewind to an earlier stage (contribution #2)
+    if (resolvedAction.startsWith("return_to_")) {
+      const targetStageName = resolvedAction.slice("return_to_".length);
+      if (!compiled.spec.stages[targetStageName]) {
+        const failed: HarnessRunResult = {
+          overall: "fail",
+          finalStage: result.stageName,
+          reason: `${gateMsg} (return_to target not found: ${targetStageName})`,
+          failureClass: "invalid_return_target"
+        };
+        return {
+          action: "fail",
+          result: failed,
+          newState: { ...baseState, status: "failed", result: failed }
+        };
+      }
+      return {
+        action: "return",
+        stage: targetStageName,
+        newState: { ...baseState, currentStage: targetStageName, status: "running" }
+      };
+    }
+
+    // Default ('retry_stage' or any unrecognised action) → retry same stage
     return {
       action: "retry",
       stage: result.stageName,

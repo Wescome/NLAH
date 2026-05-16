@@ -70,7 +70,9 @@ export const StageSpecSchema = z.object({
   outputs: z.array(z.string()).default([]),
   gate: GateSpecSchema.optional(),
   gates: GateSpecSchema.optional(),
-  on_failure: z.record(z.string(), z.string()).optional()
+  on_failure: z.record(z.string(), z.string()).optional(),
+  /** Per-stage attempt cap. Overrides `runtime.max_repair_rounds` when set. */
+  max_stage_attempts: z.number().int().positive().optional()
 });
 
 function normalizeHarnessInput(input: unknown): unknown {
