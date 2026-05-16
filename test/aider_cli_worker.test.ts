@@ -2,7 +2,7 @@ import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AdapterEnv, AdapterResult } from "../src/adapters.js";
-import { ArtifactManager } from "../src/artifacts.js";
+import { FsArtifactManager, type ArtifactManager } from "../src/artifacts.js";
 import { AiderCliWorkerAdapter } from "../src/aider_cli_worker.js";
 import { RuntimeError } from "../src/errors.js";
 import type { RuntimeState } from "../src/state.js";
@@ -59,7 +59,7 @@ async function fixture(overrides: Partial<WorkerInput> = {}): Promise<{
   const root = await tempDir("nlah-aider-cli-worker-");
   const repo = path.join(root, "repo");
   await mkdir(repo, { recursive: true });
-  const artifacts = new ArtifactManager(root, validSpec());
+  const artifacts = new FsArtifactManager(root, validSpec());
   const state: RuntimeState = {
     runId: "aider-cli-worker-test",
     currentState: "RepoMapped",

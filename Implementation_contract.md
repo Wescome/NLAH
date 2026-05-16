@@ -135,7 +135,7 @@ Create or update:
 
 ```json
 {
-  "name": "nlah",
+  "name": "@wescome/nlah",
   "version": "0.1.0",
   "description": "Natural-Language Agent Harness runtime for artifact-gated coding swarms.",
   "type": "module",

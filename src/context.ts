@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import type { ArtifactManager } from "./artifacts.js";
 import { ContextError } from "./errors.js";
 
+export type FileReader = (path: string) => Promise<string>;
+
 export type StageContext = {
   taskText: string;
   roleText?: string;
@@ -22,12 +24,15 @@ export function roleNameToFileName(roleName: string): string {
     .toLowerCase()}.md`;
 }
 
-async function readOptionalText(filePath: string | undefined): Promise<string | undefined> {
+async function readOptionalText(
+  filePath: string | undefined,
+  reader: FileReader
+): Promise<string | undefined> {
   if (!filePath) {
     return undefined;
   }
   try {
-    return await readFile(filePath, "utf8");
+    return await reader(filePath);
   } catch {
     return undefined;
   }
@@ -40,9 +45,11 @@ export async function buildStageContext(args: {
   declaredOutputs: string[];
   rolePolicy?: StageContext["rolePolicy"];
   artifacts: ArtifactManager;
+  fileReader?: FileReader;
 }): Promise<StageContext> {
-  const taskText = await readFile(args.taskPath, "utf8");
-  const roleText = await readOptionalText(args.rolePath);
+  const reader: FileReader = args.fileReader ?? ((path) => readFile(path, "utf8"));
+  const taskText = await reader(args.taskPath);
+  const roleText = await readOptionalText(args.rolePath, reader);
   const inputArtifacts: Record<string, string> = {};
   const outputArtifactPaths: Record<string, string> = {};
 

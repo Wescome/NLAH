@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
-import { ArtifactManager } from "../src/artifacts.js";
+import { FsArtifactManager, type ArtifactManager } from "../src/artifacts.js";
 import { GateError } from "../src/errors.js";
 import { evaluateGateSpec, gateRegistry, parseGateExpression } from "../src/gates.js";
 import type { RuntimeState } from "../src/state.js";
@@ -9,7 +9,7 @@ import { createTargetRepo, tempDir, validSpec } from "./helpers.js";
 async function fixture(): Promise<{ artifacts: ArtifactManager; state: RuntimeState }> {
   const root = await tempDir("nlah-gates-");
   const repo = await createTargetRepo(root);
-  const artifacts = new ArtifactManager(root, validSpec());
+  const artifacts = new FsArtifactManager(root, validSpec());
   return {
     artifacts,
     state: {

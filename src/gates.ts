@@ -177,6 +177,16 @@ export const gateRegistry: Record<string, GateFn> = {
   }
 };
 
+export function registerGate(name: string, fn: GateFn): void {
+  if (typeof name !== "string" || name.length === 0) {
+    throw new GateError("registerGate requires a non-empty gate name");
+  }
+  if (Object.prototype.hasOwnProperty.call(gateRegistry, name)) {
+    throw new GateError(`gate already registered: ${name}`);
+  }
+  gateRegistry[name] = fn;
+}
+
 export async function evaluateGateExpression(
   expr: unknown,
   state: RuntimeState,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
-import { ArtifactManager } from "../src/artifacts.js";
+import { FsArtifactManager, type ArtifactManager } from "../src/artifacts.js";
 import type { StageContext } from "../src/context.js";
 import type { RuntimeState } from "../src/state.js";
 import { DeterministicWorkerAdapter } from "../src/workers.js";
@@ -13,7 +13,7 @@ async function workerFixture(): Promise<{
 }> {
   const root = await tempDir("nlah-workers-");
   const repo = await createTargetRepo(root);
-  const artifacts = new ArtifactManager(root, validSpec());
+  const artifacts = new FsArtifactManager(root, validSpec());
   const state: RuntimeState = {
     runId: "worker-test",
     currentState: "PatchCandidate",

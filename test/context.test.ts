@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { ArtifactManager } from "../src/artifacts.js";
+import { FsArtifactManager } from "../src/artifacts.js";
 import { buildStageContext, roleNameToFileName } from "../src/context.js";
 import { ContextError } from "../src/errors.js";
 import { tempDir, validSpec } from "./helpers.js";
@@ -19,7 +19,7 @@ describe("stage context", () => {
       rolePath,
       declaredInputs: [],
       declaredOutputs: ["RepoMap"],
-      artifacts: new ArtifactManager(root, validSpec())
+      artifacts: new FsArtifactManager(root, validSpec())
     });
 
     expect(context.taskText).toBe("Task body");
@@ -36,7 +36,7 @@ describe("stage context", () => {
       rolePath: path.join(root, "missing.md"),
       declaredInputs: [],
       declaredOutputs: ["RepoMap"],
-      artifacts: new ArtifactManager(root, validSpec())
+      artifacts: new FsArtifactManager(root, validSpec())
     });
 
     expect(context).not.toHaveProperty("roleText");
@@ -45,7 +45,7 @@ describe("stage context", () => {
   it("loads input artifact text and output artifact paths", async () => {
     const root = await tempDir("nlah-context-");
     const taskPath = path.join(root, "TASK.md");
-    const artifacts = new ArtifactManager(root, validSpec());
+    const artifacts = new FsArtifactManager(root, validSpec());
     await writeFile(taskPath, "Task body", "utf8");
     await artifacts.writeText("IssueContract", "Issue contract text");
 
@@ -70,7 +70,7 @@ describe("stage context", () => {
         taskPath,
         declaredInputs: ["IssueContract"],
         declaredOutputs: ["RepoMap"],
-        artifacts: new ArtifactManager(root, validSpec())
+        artifacts: new FsArtifactManager(root, validSpec())
       })
     ).rejects.toThrow(ContextError);
   });

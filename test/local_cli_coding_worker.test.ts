@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { ArtifactManager } from "../src/artifacts.js";
+import { FsArtifactManager, type ArtifactManager } from "../src/artifacts.js";
 import { RuntimeError } from "../src/errors.js";
 import { LocalCliCodingWorkerAdapter } from "../src/local_cli_coding_worker.js";
 import type { RuntimeState } from "../src/state.js";
@@ -16,7 +16,7 @@ async function fixture(): Promise<{
   const root = await tempDir("nlah-local-cli-coding-worker-");
   const repo = path.join(root, "repo");
   await mkdir(repo, { recursive: true });
-  const artifacts = new ArtifactManager(root, validSpec());
+  const artifacts = new FsArtifactManager(root, validSpec());
   const state: RuntimeState = {
     runId: "local-cli-coding-worker-test",
     currentState: "IssueContracted",

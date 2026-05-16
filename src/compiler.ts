@@ -162,8 +162,9 @@ function compatibilityWarnings(spec: HarnessSpec): string[] {
   return warnings;
 }
 
-export async function loadHarness(filePath: string): Promise<HarnessSpec> {
-  const content = await readFile(filePath, "utf8");
+export type HarnessSource = string | { yaml: string };
+
+function parseHarnessYaml(content: string): HarnessSpec {
   const document = YAML.parseDocument(content, { uniqueKeys: true });
   if (document.errors.length > 0) {
     throw new SchemaValidationError(document.errors.map((error) => error.message).join("; "));
@@ -174,6 +175,17 @@ export async function loadHarness(filePath: string): Promise<HarnessSpec> {
     throw new SchemaValidationError(parsed.error.issues.map((issue) => issue.message).join("; "));
   }
   return parsed.data;
+}
+
+export async function loadHarness(source: HarnessSource): Promise<HarnessSpec> {
+  if (typeof source === "object" && source !== null && "yaml" in source) {
+    return parseHarnessYaml(source.yaml);
+  }
+  if (typeof source !== "string") {
+    throw new CompilerError("loadHarness requires a file path string or { yaml: string } object");
+  }
+  const content = await readFile(source, "utf8");
+  return parseHarnessYaml(content);
 }
 
 export function compileHarness(spec: HarnessSpec): CompiledHarness {

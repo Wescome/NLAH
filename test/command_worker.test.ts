@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
-import { ArtifactManager } from "../src/artifacts.js";
+import { FsArtifactManager, type ArtifactManager } from "../src/artifacts.js";
 import { CommandWorkerAdapter } from "../src/command_worker.js";
 import { RuntimeError } from "../src/errors.js";
 import type { RuntimeState } from "../src/state.js";
@@ -12,7 +12,7 @@ async function fixture(): Promise<{
   input: WorkerInput;
 }> {
   const root = await tempDir("nlah-command-worker-");
-  const artifacts = new ArtifactManager(root, validSpec());
+  const artifacts = new FsArtifactManager(root, validSpec());
   const state: RuntimeState = {
     runId: "command-worker-test",
     currentState: "IssueContracted",

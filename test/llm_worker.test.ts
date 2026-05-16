@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
-import { ArtifactManager } from "../src/artifacts.js";
+import { FsArtifactManager, type ArtifactManager } from "../src/artifacts.js";
 import {
   LlmWorkerAdapter,
   type LlmProvider,
@@ -27,7 +27,7 @@ async function fixture(): Promise<{
   input: WorkerInput;
 }> {
   const root = await tempDir("nlah-llm-worker-");
-  const artifacts = new ArtifactManager(root, validSpec());
+  const artifacts = new FsArtifactManager(root, validSpec());
   const state: RuntimeState = {
     runId: "llm-worker-test",
     currentState: "IssueContracted",

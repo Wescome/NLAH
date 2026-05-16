@@ -15,11 +15,30 @@ export type ArtifactContractResult = {
   message: string;
 };
 
-export class ArtifactManager {
+export type ArtifactStorageHandle =
+  | { kind: "fs"; root: string }
+  | { kind: "r2"; bucketBinding: string; prefix: string };
+
+export interface ArtifactManager {
+  resolve(name: string): string;
+  exists(name: string): Promise<boolean>;
+  readText(name: string): Promise<string>;
+  writeText(name: string, content: string): Promise<string>;
+  status(name: string): Promise<ArtifactStatus>;
+  validateContract(name: string): Promise<ArtifactContractResult>;
+  allStatuses(): Promise<Record<string, ArtifactStatus>>;
+  getStorageHandle(): ArtifactStorageHandle;
+}
+
+export class FsArtifactManager implements ArtifactManager {
   constructor(
     private readonly runRoot: string,
     private readonly spec: HarnessSpec
   ) {}
+
+  getStorageHandle(): ArtifactStorageHandle {
+    return { kind: "fs", root: this.runRoot };
+  }
 
   resolve(name: string): string {
     const artifact = this.spec.artifacts[name];
