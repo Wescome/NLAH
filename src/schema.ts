@@ -142,6 +142,8 @@ export const HarnessSpecSchema = z.preprocess(
   normalizeHarnessInput,
   z.object({
     nlahspec: z.union([z.literal("0.1"), z.literal("0.2")]),
+    // Contribution #4: explicit lineage field so compileHarness does not strip it.
+    lineage: z.object({ source_refs: z.array(z.string()) }).optional(),
     harness: HarnessMetadataSchema,
     runtime: RuntimeConfigSchema,
     roles: z.record(z.string(), RoleSpecSchema),
